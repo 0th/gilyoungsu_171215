@@ -2,12 +2,13 @@ var express = require('express');
 var redis = require('redis');
 var redisClient = redis.createClient();
 var router = express.Router();
+var _ = require('underscore');
 
 /**
  * todo
+ * underscore 쓰기
  * 팬덤리스트 넘어오면 디비에 넣기
  * db 몇개 쓸지 설계
- * 비밀번호 유효 확인 -> 플레이스토어 연계 후
  */
 
 
@@ -28,7 +29,9 @@ router.post('/join', function (req, res) {
         id: id,
         pwd: pwd,
         fandom: fandom,
-        state: 0
+        state: 0,
+        star: 0,
+        coin: 0
     };
 
     console.log(user.id + "/" + user.pwd + '/' + user.fandom + '/' + user.state);
@@ -47,15 +50,14 @@ router.post('/join', function (req, res) {
                 res.send("Same ID");
                 return;
             }
-
         }
 
         var multi = redisClient.multi();
         multi.select(0);
 
         multi.hmset(user.fandom + ':' + user.id, user);
+        multi.hmset('users:' + user.id, user);
         multi.sadd('users', user.id);
-        multi.sadd(user.fandom, user.id);
 
         multi.exec(function (rep) {
             console.log("회원가입이 완료되었습니다");
@@ -63,7 +65,6 @@ router.post('/join', function (req, res) {
         });
     });
 });
-
 /**
  *
  * 로그인 구현
