@@ -3,94 +3,255 @@ var redis = require('redis');
 var redisClient = redis.createClient();
 var router = express.Router();
 var _ = require('underscore');
+var GoogleSpreadsheet = require("google-spreadsheet");
+var fandomListsheet = new GoogleSpreadsheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjBQZuYqH5vQ');
+var balloonColorListSheet = new GoogleSpreadsheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
 
 /**
- * todo
- * underscore 쓰기
- * 팬덤리스트 넘어오면 디비에 넣기
- * db 몇개 쓸지 설계
+ *
+ * TODO
+ *
+ * fandomList - 홀수 짝수 제이슨만들어주기
+ *
  */
 
 
 /**
  *
+ *  팬덤리스트 초기화 함수
+ *
+ */
+
+function initFandomList() {
+    fandomListsheet.getRows(1, function (err, rowData) {
+        console.log(rowData.length);
+
+        var rowKeys = Object.keys(rowData);
+
+        rowKeys.forEach(function (key) {
+            var keys = Object.keys(rowData[key]);
+
+            var multi = redisClient.multi();
+            multi.select(0);
+
+            multi.sadd("allFandomList", rowData[key][keys[5]]);
+            multi.zadd("fandomUserNumber", 0, rowData[key][keys[5]]);
+
+
+            multi.exec(function (err, reply) {
+                // console.log(err, reply);
+            });
+        })
+    })
+}
+
+/**
+ *
+ * 풍선 컬러 디비초기화
+ *
+ */
+
+function initBalloonColor() {
+    balloonColorListSheet.getRows(1, function (err, rowData) {
+        console.log(rowData.length);
+
+        var rowKeys = Object.keys(rowData);
+
+        rowKeys.forEach(function (key) {
+            var keys = Object.keys(rowData[key]);
+
+            var multi = redisClient.multi();
+            multi.select(0);
+
+            multi.sadd("balloonColor", rowData[key][keys[3]]);
+
+            multi.exec(function (err, reply) {
+                //console.log(err, reply);
+            });
+        })
+    });
+}
+
+
+/**
+ *
+ * 팬덤별 풍선 랭크 초기화 함수
+ *
+ */
+
+function initFandomBalloonRank() {
+
+    var multi = redisClient.multi();
+    multi.select(0);
+
+    multi.smembers("allFandomList");
+    multi.exec(function (err, data) {
+        var fandoms = data[1];
+        console.log(fandoms);
+        var multi = redisClient.multi();
+        multi.select(0);
+
+        multi.smembers("balloonColor");
+
+        multi.exec(function (err, color) {
+            var colors = color[1];
+
+            console.log(colors);
+            var multi = redisClient.multi();
+            multi.select(0);
+
+            _.map(fandoms, function (fandom) {
+                _.map(colors, function (color) {
+                    multi.zadd("balloonColorRank" + ':' + fandom, 0, color);
+                })
+            });
+
+            multi.exec(function (err, rep) {
+                console.log(err, rep);
+            });
+        });
+    });
+}
+
+
+/*initFandomList();
+ initBalloonColor();
+ initFandomBalloonRank();*/
+
+
+/**
+ *
  * 회원가입 구현
- * id , pwd, fandom 필요
+ * @id
  *
  */
 
 router.post('/join', function (req, res) {
 
     var id = req.body.id;
-    var pwd = req.body.pwd;
-    var fandom = req.body.fandom;
+    console.log(id);
 
     var user = {
-        id: id,
-        pwd: pwd,
-        fandom: fandom,
-        state: 0,
-        star: 0,
-        coin: 0
+        balloonCount: 0,
+        starCount: 0,
+        fandomName: '',
+        selectedSloganColor: '',
+        selectedSloganText: '',
+        selectedBalloon: '',
+        level: 1
     };
-
-    console.log(user.id + "/" + user.pwd + '/' + user.fandom + '/' + user.state);
 
     var multi = redisClient.multi();
     multi.select(0);
 
-    multi.smembers('users');
+    multi.sadd('userID', id);
+    multi.hmset('userInfo' + ':' + id, user);
 
     multi.exec(function (err, data) {
-        var users = data[1];
+        res.send('welcome');
+    });
+});
 
-        for (var i = 0; i < users.length; i++) {
-            if (users[i] == user.id) {
-                console.log("입력하신 아이디는 이미 존재하는 아이디입니다");
-                res.send("Same ID");
-                return;
-            }
-        }
 
+/**
+ *
+ * 팬덤리스트 요청
+ *
+ */
+
+router.post('/fandomList', function (req, res) {
+
+    var multi = redisClient.multi();
+    multi.select(0);
+
+    multi.zrevrange('fandomUserNumber', 0, -1, 'withscores');
+
+    multi.exec(function (err, reply) {
+        res.send(reply);
+    });
+})
+
+
+/**
+ *  팬덤가입
+ *  @id
+ *  @fandomName
+ *  @selectedBalloon
+ */
+
+router.post('/joinFandom', function (req, res) {
+
+    var id = req.body.id;
+    var fandomName = req.body.fandomName;
+    var selectedBalloon = req.body.selectedBalloon;
+
+    if (selectedBalloon == "") {
         var multi = redisClient.multi();
         multi.select(0);
 
-        multi.hmset(user.fandom + ':' + user.id, user);
-        multi.hmset('users:' + user.id, user);
-        multi.sadd('users', user.id);
+        multi.zrange('balloonColorRank:' + fandomName, 0, 0);
 
-        multi.exec(function (rep) {
-            console.log("회원가입이 완료되었습니다");
-            res.send("Welcome!");
+        multi.exec(function (err, color) {
+            var firstColor = color[1].toString();
+            selectedBalloon = firstColor;
+
+            var multi = redisClient.multi();
+            multi.select(0);
+
+            multi.hmset('userInfo:' + id, 'fandomName', fandomName, 'selectedBalloon', selectedBalloon);
+            multi.hincrby('balloonColorRank:' + fandomName, selectedBalloon, 1);
+
+            multi.exec(function (err, rep) {
+                var multi = redisClient.multi();
+                multi.select(0);
+
+                multi.zincrby('fandomUserNumber', 1, fandomName);
+                multi.exec(function (err, replies) {
+
+                });
+
+            });
         });
-    });
+    }
+
+    else {
+        var multi = redisClient.multi();
+        multi.select(0);
+
+        multi.hmset('userInfo:' + id, 'fandomName', fandomName, 'selectedBalloon', selectedBalloon);
+        multi.zincrby('balloonColorRank:' + fandomName, 1, selectedBalloon);
+        multi.zincrby('fandomUserNumber', 1, fandomName);
+
+        multi.exec(function (err, rep) {
+
+        });
+    }
 });
+
 /**
  *
  * 로그인 구현
- * id, pwd 필요
+ * @id
  *
  */
 
 router.post('/login', function (req, res) {
     var id = req.body.id;
-    var pwd = req.body.pwd;
 
     var multi = redisClient.multi();
-    multi.hgetall("users" + ':' + id);
+    multi.select(0);
+
+    multi.smembers("userID");
 
     multi.exec(function (err, rep) {
-        console.log(rep);
+        var ids = rep[1];
 
-        if (rep[0].pwd == pwd)
-            console.log("환영합니다" + rep[0].id + "님");
-
-        else
-            console.log("아이디와 비밀번호를 확인해주세요");
+        _.map(ids, function (each) {
+            if (each == id)
+                res.send("Login Succeed!");
+        });
     });
 });
 
 
 module.exports = router;
-
-
