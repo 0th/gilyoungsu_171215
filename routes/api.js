@@ -155,11 +155,11 @@ router.post('/join', function (req, res) {
 
 /**
  *
- * 팬덤리스트 요청
+ * 팬덤 회원수 정렬 리스트 요청
  *
  */
 
-router.post('/fandomList', function (req, res) {
+router.get('/fandomUserNumberList', function (req, res) {
 
     var multi = redisClient.multi();
     multi.select(0);
@@ -167,9 +167,16 @@ router.post('/fandomList', function (req, res) {
     multi.zrevrange('fandomUserNumber', 0, -1, 'withscores');
 
     multi.exec(function (err, reply) {
-        res.send(reply);
+
+        var fandomList = reply[1];
+        var data = {};
+
+        for (var i = 0; i < fandomList.length; i = i + 2) {
+            data[fandomList[i]] = fandomList[i + 1];
+        }
+        res.send(data);
     });
-})
+});
 
 
 /**
