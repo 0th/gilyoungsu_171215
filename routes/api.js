@@ -9,7 +9,6 @@ var balloonColorListSheet = new GoogleSpreadsheet('1vTJGuUxxxrvLP_01izehPxKME_6n
 var iconv = require('iconv-lite');
 
 const GAME_BOARD = 36;
-//iconv.skipDecodeWarning = true;
 
 /**
  *
@@ -59,14 +58,11 @@ function sendFandomJoinResult(res) {
 
 function sendLoginResult(res, isExisted) {
     var message = {}
-    if (isExisted == 1) {
+    if (isExisted == 1) 
         message.isSucceed = true;
-        message.text = "로그인 성공";
-    }
-    else {
+
+    else 
         message.isSucceed = false;
-        message.text = "아이디가 존재하지 않습니다";
-    }
 
     res.send(message);
 }
@@ -95,7 +91,7 @@ function initFandomList() {
 
 
             multi.exec(function (err, reply) {
-                // console.log(err, reply);
+
             });
         })
     })
@@ -124,7 +120,7 @@ function initBalloonColor() {
             multi.sadd("balloonColor", rowData[key][keys[3]]);
 
             multi.exec(function (err, reply) {
-                //console.log(err, reply);
+
             });
         })
     });
@@ -154,7 +150,7 @@ function initShopBalloon() {
             multi.hmset("shopBalloon", rowData[key][keys[3]], rowData[key][keys[4]]);
 
             multi.exec(function (err, reply) {
-                //console.log(err, reply);
+
             });
         })
     });
@@ -173,6 +169,7 @@ function initFandomBalloonRank() {
     multi.select(0);
 
     multi.smembers("allFandomList");
+
     multi.exec(function (err, data) {
         var fandoms = data[1];
         console.log(fandoms);
@@ -194,7 +191,7 @@ function initFandomBalloonRank() {
             });
 
             multi.exec(function (err, rep) {
-                console.log(err, rep);
+
             });
         });
     });
@@ -337,6 +334,7 @@ router.get('/fandomUserNumberList', function (req, res) {
 });
 
 
+
 /**
  *  팬덤가입
  *  @id
@@ -349,6 +347,8 @@ router.post('/joinFandom', function (req, res) {
     var id = req.body.id;
     var fandomName = req.body.fandomName;
     var selectedBalloon = req.body.selectedBalloon;
+    var userLevel = 5;
+
 
     if (selectedBalloon == "") {
         var multi = redisClient.multi();
@@ -361,29 +361,51 @@ router.post('/joinFandom', function (req, res) {
             selectedBalloon = firstColor;
 
             var multi = redisClient.multi();
-            multi.select(1);
-
-            /**
-             * TODO
-             * 팬덤 선택시 팬덤레벨에 따른 유저 레벨 설정하기부분
-             */
-
-
-
-
-
-
-            var multi = redisClient.multi();
             multi.select(0);
 
-            multi.hmset('userInfo:' + id, 'fandomName', fandomName, 'selectedBalloon', selectedBalloon);
-            multi.zincrby('balloonColorRank:' + fandomName, selectedBalloon, 1);
-            multi.zadd('userRank:' + fandomName, 0, id);
-            multi.sadd('userBalloonList:' + id, selectedBalloon);
-            multi.zincrby('fandomUserNumber', 1, fandomName);
+            multi.zcard('fandomRank');
+            multi.zrank('fandomRank', fandomName);
 
             multi.exec(function (err, rep) {
-                sendFandomJoinResult(res);
+
+                var allFandomNumber = rep[1];
+                var fandomRank = rep[2];
+
+                var userFandomRankRatio = fandomRank / allFandomNumber;
+
+                var multi = redisClient.multi();
+                multi.select(1);
+
+                multi.hgetall('gameLevelRatio');
+
+
+                multi.exec(function (err, data) {
+                    var allLevelRatio = data[1];
+
+                    if (userFandomRankRatio <= allLevelRatio[5])
+                        userLevel = 5;
+                    else if (userFandomRankRatio <= allLevelRatio[4])
+                        userLevel = 4;
+                    else if (userFandomRankRatio <= allLevelRatio[3])
+                        userLevel = 3;
+                    else if (userFandomRankRatio <= allLevelRatio[2])
+                        userLevel = 2;
+                    else if (userFandomRankRatio <= allLevelRatio[1])
+                        userLevel = 1;
+
+                    var multi = redisClient.multi();
+                    multi.select(0);
+
+                    multi.hmset('userInfo:' + id, 'fandomName', fandomName, 'selectedBalloon', selectedBalloon, 'level', userLevel);
+                    multi.zincrby('balloonColorRank:' + fandomName, selectedBalloon, 1);
+                    multi.zadd('userRank:' + fandomName, 0, id);
+                    multi.sadd('userBalloonList:' + id, selectedBalloon);
+                    multi.zincrby('fandomUserNumber', 1, fandomName);
+
+                    multi.exec(function (err, rep) {
+                        sendFandomJoinResult(res);
+                    });
+                });
             });
         });
     }
@@ -392,19 +414,54 @@ router.post('/joinFandom', function (req, res) {
         var multi = redisClient.multi();
         multi.select(0);
 
-        multi.hmset('userInfo:' + id, 'fandomName', fandomName, 'selectedBalloon', selectedBalloon);
-        multi.zincrby('balloonColorRank:' + fandomName, 1, selectedBalloon);
-        multi.zincrby('fandomUserNumber', 1, fandomName);
-        multi.zadd('userRank:' + fandomName, 0, id);
-        multi.sadd('userBalloonList:' + id, selectedBalloon);
+        multi.zcard('fandomRank');
+        multi.zrank('fandomRank', fandomName);
 
         multi.exec(function (err, rep) {
-            sendFandomJoinResult(res);
+
+            var allFandomNumber = rep[1];
+            var fandomRank = rep[2];
+
+            var userFandomRankRatio = fandomRank / allFandomNumber;
+
+            var multi = redisClient.multi();
+            multi.select(1);
+
+            multi.hgetall('gameLevelRatio');
+
+
+            multi.exec(function (err, data) {
+                var allLevelRatio = data[1];
+
+                if (userFandomRankRatio <= allLevelRatio[5])
+                    userLevel = 5;
+                else if (userFandomRankRatio <= allLevelRatio[4])
+                    userLevel = 4;
+                else if (userFandomRankRatio <= allLevelRatio[3])
+                    userLevel = 3;
+                else if (userFandomRankRatio <= allLevelRatio[2])
+                    userLevel = 2;
+                else if (userFandomRankRatio <= allLevelRatio[1])
+                    userLevel = 1;
+
+                var multi = redisClient.multi();
+                multi.select(0);
+
+                multi.hmset('userInfo:' + id, 'fandomName', fandomName, 'selectedBalloon', selectedBalloon, 'level', userLevel);
+                multi.zincrby('balloonColorRank:' + fandomName, 1, selectedBalloon);
+                multi.zincrby('fandomUserNumber', 1, fandomName);
+                multi.zadd('userRank:' + fandomName, 0, id);
+                multi.sadd('userBalloonList:' + id, selectedBalloon);
+
+                multi.exec(function (err, rep) {
+                    sendFandomJoinResult(res);
+                });
+            });
         });
     }
 
-
 });
+
 
 /**
  *
@@ -439,11 +496,7 @@ router.post('/login', function (req, res) {
 
 router.get('/balloonRankList', function (req, res) {
 
-    var rawFandomName = req.query.fandomName;
     var fandomName = req.query.fandomName;
-
-    //var fandomName = iconv.decode(rawFandomName, 'utf8');
-
 
     var multi = redisClient.multi();
     multi.select(0);
@@ -455,6 +508,7 @@ router.get('/balloonRankList', function (req, res) {
         var result = {firstBalloon: firstColor[0]}
         res.send(result);
     });
+
 });
 
 
