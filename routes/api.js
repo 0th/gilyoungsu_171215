@@ -3,12 +3,25 @@ var redis = require('redis');
 var redisClient = redis.createClient();
 var router = express.Router();
 var _ = require('underscore');
-var GoogleSpreadsheet = require("google-spreadsheet");
-var fandomListsheet = new GoogleSpreadsheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjBQZuYqH5vQ');
-var balloonColorListSheet = new GoogleSpreadsheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
-var iconv = require('iconv-lite');
-
+var GoogleSpreadSheet = require("google-spreadsheet");
+var fandomListSheet = new GoogleSpreadSheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjBQZuYqH5vQ');
+var balloonColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
+var balloonShopListSheet = new GoogleSpreadSheet('1eu3ufiAguhojmI0dSkSG0bySoNdwNezzbrxJawsE7ho');
 const GAME_BOARD = 36;
+
+const SHEET_ERROR = 101;
+const SERVER_ERROR = 202;
+const ID_REPEATED_ERROR = 303;
+const JOIN_FAIL_ERROR = 404;
+const FANDOM_USER_RANK_ERROR = 405;
+const FANDOM_RANK_LOAD_ERROR = 406;
+const LEVEL_RATIO_LOAD_ERROR = 407;
+const JOIN_FANDOM_FAIL_ERROR = 408;
+const LOGIN_FAIL_ERROR = 409;
+const JOIN_SUCCEED = 700;
+const JOIN_FANDOM_SUCCEED = 707;
+const LOGIN_SUCCEED = 708;
+
 
 /**
  *
@@ -17,66 +30,66 @@ const GAME_BOARD = 36;
  */
 
 
-/**
- * 회원가입 결과 send
- */
 
-function sendJoinResult(res, isExisted) {
-    var message = {}
-
-    if (isExisted == 1) {
-        message.isSucceed = false;
-        message.text = "이미 존재하는 회원입니다";
-    }
-    else {
-        message.isSucceed = true;
-        message.text = "회원가입이 완료되었습니다";
-    }
-
-    res.send(message);
+function sendErrorMessage(res, error) {
+    res.sendStatus(error);
 }
 
-
-/**
- * 팬덤 가입 결과 send
- */
-
-function sendFandomJoinResult(res) {
-
-    var message = {
-        isSucceed: true,
-        text: "팬덤가입이 완료되었습니다"
-    }
-
-    res.send(message);
+function sendSucceedMessage(res, message) {
+    res.sendStatus(message);
 }
 
-
-/**
- * 로그인 결과 send
- */
-
-function sendLoginResult(res, isExisted) {
-    var message = {}
-    if (isExisted == 1) 
-        message.isSucceed = true;
-
-    else 
-        message.isSucceed = false;
-
-    res.send(message);
+function getFandomUserNumber() {
+    return 'fandomUserNumber';
 }
 
+function getBalloonColorList() {
+    return 'balloonColor';
+}
+
+function getShopBalloonList() {
+    return 'shopBalloon';
+}
+
+function getFandomBalloonRank() {
+    return 'fandomBalloonRank:';
+}
+
+function getFandomRank() {
+    return 'fandomRank';
+}
+
+function getUserID() {
+    return 'userID';
+}
+function getUserInfo() {
+    return 'userInfo:';
+}
+
+function getGameLevelRatio() {
+    return 'gameLevelRatio';
+}
+
+function getUserRank() {
+    return 'userRank:'
+}
+function getUserBalloonList() {
+    return 'userBalloonList:';
+}
 
 /**
  *
- *  팬덤리스트 초기화 함수
+ *  팬덤리스트 초기화
  *
  */
 
-function initFandomList() {
-    fandomListsheet.getRows(1, function (err, rowData) {
-        console.log(rowData.length);
+router.get('/initFandomUserNumber', function (req, res) {
+
+    fandomListSheet.getRows(1, function (err, rowData) {
+
+        if (err != null)
+            sendErrorMessage(res, SHEET_ERROR);
+        
 
         var rowKeys = Object.keys(rowData);
 
@@ -84,149 +97,150 @@ function initFandomList() {
             var keys = Object.keys(rowData[key]);
 
             var multi = redisClient.multi();
-            multi.select(0);
-
-            multi.sadd("allFandomList", rowData[key][keys[5]]);
-            multi.zadd("fandomUserNumber", 0, rowData[key][keys[5]]);
-
-
-            multi.exec(function (err, reply) {
-
-            });
+            multi.select(0)
+                .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]])
+                .exec(function (error, reply) {
+                    if (error != null)
+                        sendErrorMessage(res, SERVER_ERROR);
+                    console.log('initFandomUserNumber succeed', reply);
+                });
         })
     })
-}
+});
 
 /**
  *
  * 풍선 컬러 디비초기화
  *
- * 팬덤 내 풍선 색 순위를 초기화해주기 위한 함수
- *
  */
 
-function initBalloonColor() {
+
+router.get('/initBalloonColor', function (req, res) {
+
     balloonColorListSheet.getRows(1, function (err, rowData) {
-        console.log(rowData.length);
+
+        if (err != null) {
+            sendErrorMessage(res, SHEET_ERROR);
+        }
 
         var rowKeys = Object.keys(rowData);
-
         rowKeys.forEach(function (key) {
             var keys = Object.keys(rowData[key]);
 
             var multi = redisClient.multi();
-            multi.select(0);
-
-            multi.sadd("balloonColor", rowData[key][keys[3]]);
-
-            multi.exec(function (err, reply) {
-
-            });
+            multi.select(0)
+                .sadd(getBalloonColorList(), rowData[key][keys[3]])
+                .exec(function (err, reply) {
+                    if (err != null)
+                        sendErrorMessage(res, SERVER_ERROR);
+                    console.log('initBalloonColor succeed', reply);
+                });
         })
-    });
-}
+    })
+});
 
 
 /**
  *
- * 풍선 색 및 가격 초기화 함수
- *
- * @tableName: shopBalloon
+ * 상점 풍선모양 및 가격 초기화
  *
  */
 
-function initShopBalloon() {
-    balloonColorListSheet.getRows(1, function (err, rowData) {
-        console.log(rowData.length);
+router.get('/initShopBalloon', function (req, res) {
+
+    balloonShopListSheet.getRows(1, function (err, rowData) {
+
+        if (err != null) {
+            sendErrorMessage(res, SHEET_ERROR);
+        }
 
         var rowKeys = Object.keys(rowData);
-
         rowKeys.forEach(function (key) {
             var keys = Object.keys(rowData[key]);
 
             var multi = redisClient.multi();
-            multi.select(0);
+            multi.select(0)
+                .hset(getShopBalloonList(), rowData[key][keys[3]], rowData[key][keys[4]])
+                .exec(function (err, reply) {
+                    if (err != null)
+                        sendErrorMessage(res, SERVER_ERROR);
 
-            multi.hmset("shopBalloon", rowData[key][keys[3]], rowData[key][keys[4]]);
-
-            multi.exec(function (err, reply) {
-
-            });
+                    console.log('initShopBalloon succeed', reply);
+                });
         })
-    });
-}
+    })
+});
 
 
 /**
  *
- * 팬덤별 풍선 랭크 초기화 함수
+ * 팬덤별 풍선 랭크 초기화
  *
  */
 
-function initFandomBalloonRank() {
+
+router.get('/initFandomBalloonRank', function (req, res) {
 
     var multi = redisClient.multi();
-    multi.select(0);
+    multi.select(0)
+        .zrange(getFandomUserNumber(), 0, -1)
+        .smembers(getBalloonColorList())
+        .exec(function (err, rep) {
+            if (err != null)
+                sendErrorMessage(res, err);
 
-    multi.smembers("allFandomList");
-
-    multi.exec(function (err, data) {
-        var fandoms = data[1];
-        console.log(fandoms);
-        var multi = redisClient.multi();
-        multi.select(0);
-
-        multi.smembers("balloonColor");
-
-        multi.exec(function (err, color) {
-            var colors = color[1];
+            var allFandomList = rep[1];
+            var allBalloonColorList = rep[2];
 
             var multi = redisClient.multi();
             multi.select(0);
 
-            _.map(fandoms, function (fandom) {
-                _.map(colors, function (color) {
-                    multi.zadd("balloonColorRank" + ':' + fandom, 0, color);
-                })
+            _.map(allFandomList, function (eachFandomName) {
+                _.map(allBalloonColorList, function (eachColor) {
+                    multi.zadd(getFandomBalloonRank() + eachFandomName, 0, eachColor);
+                });
+
+                multi.exec(function (error, reply) {
+                    if (error != null)
+                        sendErrorMessage(res, error);
+
+                    console.log('initFandomBalloonRank succeed', reply);
+
+                });
+            });
+        });
+});
+
+
+/**
+ *
+ * 전체 팬덤 점수 랭킹 초기화
+ *
+ */
+
+router.get('/initFandomRank', function (req, res) {
+
+    var multi = redisClient.multi();
+    multi.select(0)
+        .zrange(getFandomUserNumber(), 0, -1)
+        .exec(function (err, data) {
+            var allFandomList = data[1];
+
+            var multi = redisClient.multi();
+            multi.select(0);
+
+            _.map(allFandomList, function (eachFandom) {
+                multi.zadd(getFandomRank(), 0, eachFandom);
             });
 
             multi.exec(function (err, rep) {
+                if (err != null)
+                    sendErrorMessage(res, SERVER_ERROR);
 
+                console.log('initFandomRank succeed', rep);
             });
         });
-    });
-}
-
-/**
- *
- * 전체 팬덤 점수 랭킹 초기화함수
- * @tableName: fandomRank
- */
-
-function initFandomRank() {
-
-    var multi = redisClient.multi();
-    multi.select(0);
-
-    multi.smembers("allFandomList");
-
-    multi.exec(function (err, data) {
-        var fandoms = data[1];
-
-        var multi = redisClient.multi();
-        multi.select(0);
-
-        _.map(fandoms, function (fandom) {
-            multi.zadd("fandomRank", 0, fandom);
-        });
-
-        multi.exec(function (err, rep) {
-
-        });
-    });
-
-
-}
+});
 
 
 /**
@@ -246,65 +260,67 @@ function initFandomRank() {
 
 /**
  *
- * 회원가입 구현
- * @id
+ * 회원가입
+ * @id : 사용자 아이디
  *
  */
 
 router.post('/join', function (req, res) {
 
     var id = req.body.id;
-
+    var seledtedBalloonShape = 'basic';
     var user = {
+        coinCount: 0,
         balloonCount: 0,
         starCount: 0,
         fandomName: '',
+        hasSlogan: 0,
         selectedSloganColor: '',
         selectedSloganText: '',
-        selectedBalloon: '',
-        level: 1
+        selectedBalloonColor: '',
+        seledtedBalloonShape: 'basic',
+        level: 5
     };
 
     var multi = redisClient.multi();
-    multi.select(0);
+    multi.select(0)
+        .exists('userInfo:' + id)
+        .exec(function (err, rep) {
 
-    multi.exists('userInfo:' + id);
+            if (err != null)
+                sendErrorMessage(res, SERVER_ERROR);
 
-    multi.exec(function (err, rep) {
-        var isExisted = rep[1];
-        if (isExisted == 0) {
-
-            var multi = redisClient.multi();
-            multi.select(0);
-
-            multi.sadd('userID', id);
-            multi.hmset('userInfo' + ':' + id, user);
-
-            multi.exec(function (err, data) {
+            var isExisted = rep[1];
+            if (isExisted == 0) {
 
                 var multi = redisClient.multi();
-                multi.select(1);
+                multi.select(0)
+                    .sadd(getUserID(), id)
+                    .hmset(getUserInfo() + id, user)
+                    .sadd(getUserBalloonList() + id, seledtedBalloonShape)
+                    .exec(function (error) {
+                        if (error != null)
+                            sendErrorMessage(res, JOIN_FAIL_ERROR);
 
-                /**
-                 *
-                 * 게임기본정보 초기화 부분
-                 *
-                 */
-                for (var i = 0; i < GAME_BOARD; i++) {
-                    multi.hset('userGameBalloon:' + id, i, 0);
-                    multi.hset('userStarType:' + id, i, 0);
-                }
+                        var multi = redisClient.multi();
+                        multi.select(1);
 
-                multi.exec(function (err, reply) {
-                    sendJoinResult(res, isExisted);
-                });
-            });
-        }
-        else
-            sendJoinResult(res, isExisted);
-    });
+                        for (var i = 0; i < GAME_BOARD; i++) {
+                            multi.hset('userGameBalloon:' + id, i, 0)
+                                .hset('userStarType:' + id, i, 0);
+                        }
 
+                        multi.exec(function (err) {
+                            if (err != null)
+                                sendErrorMessage(res, JOIN_FAIL_ERROR);
 
+                            sendSucceedMessage(res, JOIN_SUCCEED);
+                        });
+                    });
+            }
+            else
+                sendErrorMessage(res, ID_REPEATED_ERROR);
+        });
 });
 
 
@@ -314,25 +330,23 @@ router.post('/join', function (req, res) {
  *
  */
 
-router.get('/fandomUserNumberList', function (req, res) {
-
+router.get('/fandomUserNumberRank', function (req, res) {
     var multi = redisClient.multi();
-    multi.select(0);
+    multi.select(0)
+        .zrevrange(getFandomUserNumber(), 0, -1, 'withscores')
+        .exec(function (err, rep) {
+            if (err != null)
+                sendErrorMessage(res, FANDOM_USER_RANK_ERROR);
 
-    multi.zrevrange('fandomUserNumber', 0, -1, 'withscores');
+            var fandomList = rep[1];
+            var fandomUserNumberRank = {};
 
-    multi.exec(function (err, reply) {
-
-        var fandomList = reply[1];
-        var data = {};
-
-        for (var i = 0; i < fandomList.length; i = i + 2) {
-            data[fandomList[i]] = fandomList[i + 1];
-        }
-        res.send(data);
-    });
+            for (var i = 0; i < fandomList.length; i = i + 2) {
+                fandomUserNumberRank[fandomList[i]] = fandomList[i + 1];
+            }
+            res.send(fandomUserNumberRank);
+        });
 });
-
 
 
 /**
@@ -346,40 +360,28 @@ router.post('/joinFandom', function (req, res) {
 
     var id = req.body.id;
     var fandomName = req.body.fandomName;
-    var selectedBalloon = req.body.selectedBalloon;
-    var userLevel = 5;
+    var selectedBalloonColor = req.body.selectedBalloon;
+    var userLevel = 1;
 
+    var multi = redisClient.multi();
+    multi.select(0)
+        .zcard(getFandomRank())
+        .zrank(getFandomRank(), fandomName)
+        .exec(function (err, rep) {
+            if (err != null)
+                send(err, FANDOM_RANK_LOAD_ERROR);
 
-    if (selectedBalloon == "") {
-        var multi = redisClient.multi();
-        multi.select(0);
-
-        multi.zrevrange('balloonColorRank:' + fandomName, 0, 0);
-
-        multi.exec(function (err, color) {
-            var firstColor = color[1].toString();
-            selectedBalloon = firstColor;
+            var allFandomNumber = rep[1];
+            var fandomRank = rep[2];
+            var userFandomRankRatio = fandomRank / allFandomNumber;
 
             var multi = redisClient.multi();
-            multi.select(0);
+            multi.select(1)
+                .hgetall(getGameLevelRatio())
+                .exec(function (error, data) {
+                    if (error != null)
+                        sendErrorMessage(res, LEVEL_RATIO_LOAD_ERROR);
 
-            multi.zcard('fandomRank');
-            multi.zrank('fandomRank', fandomName);
-
-            multi.exec(function (err, rep) {
-
-                var allFandomNumber = rep[1];
-                var fandomRank = rep[2];
-
-                var userFandomRankRatio = fandomRank / allFandomNumber;
-
-                var multi = redisClient.multi();
-                multi.select(1);
-
-                multi.hgetall('gameLevelRatio');
-
-
-                multi.exec(function (err, data) {
                     var allLevelRatio = data[1];
 
                     if (userFandomRankRatio <= allLevelRatio[5])
@@ -393,75 +395,22 @@ router.post('/joinFandom', function (req, res) {
                     else if (userFandomRankRatio <= allLevelRatio[1])
                         userLevel = 1;
 
+
                     var multi = redisClient.multi();
-                    multi.select(0);
+                    multi.select(0)
+                        .hmset(getUserInfo() + id, 'fandomName', fandomName, 'selectedBalloonColor', selectedBalloonColor, 'level', userLevel)
+                        .zincrby(getFandomBalloonRank() + fandomName, 1, selectedBalloonColor)
+                        .zadd(getUserRank() + fandomName, 0, id)
+                        .zincrby(getFandomUserNumber(), 1, fandomName)
+                        .exec(function (errorData) {
+                            if (errorData != null)
+                                sendErrorMessage(res, JOIN_FANDOM_FAIL_ERROR);
 
-                    multi.hmset('userInfo:' + id, 'fandomName', fandomName, 'selectedBalloon', selectedBalloon, 'level', userLevel);
-                    multi.zincrby('balloonColorRank:' + fandomName, selectedBalloon, 1);
-                    multi.zadd('userRank:' + fandomName, 0, id);
-                    multi.sadd('userBalloonList:' + id, selectedBalloon);
-                    multi.zincrby('fandomUserNumber', 1, fandomName);
-
-                    multi.exec(function (err, rep) {
-                        sendFandomJoinResult(res);
-                    });
+                            sendSucceedMessage(res, JOIN_FANDOM_SUCCEED);
+                        });
                 });
-            });
         });
-    }
-
-    else {
-        var multi = redisClient.multi();
-        multi.select(0);
-
-        multi.zcard('fandomRank');
-        multi.zrank('fandomRank', fandomName);
-
-        multi.exec(function (err, rep) {
-
-            var allFandomNumber = rep[1];
-            var fandomRank = rep[2];
-
-            var userFandomRankRatio = fandomRank / allFandomNumber;
-
-            var multi = redisClient.multi();
-            multi.select(1);
-
-            multi.hgetall('gameLevelRatio');
-
-
-            multi.exec(function (err, data) {
-                var allLevelRatio = data[1];
-
-                if (userFandomRankRatio <= allLevelRatio[5])
-                    userLevel = 5;
-                else if (userFandomRankRatio <= allLevelRatio[4])
-                    userLevel = 4;
-                else if (userFandomRankRatio <= allLevelRatio[3])
-                    userLevel = 3;
-                else if (userFandomRankRatio <= allLevelRatio[2])
-                    userLevel = 2;
-                else if (userFandomRankRatio <= allLevelRatio[1])
-                    userLevel = 1;
-
-                var multi = redisClient.multi();
-                multi.select(0);
-
-                multi.hmset('userInfo:' + id, 'fandomName', fandomName, 'selectedBalloon', selectedBalloon, 'level', userLevel);
-                multi.zincrby('balloonColorRank:' + fandomName, 1, selectedBalloon);
-                multi.zincrby('fandomUserNumber', 1, fandomName);
-                multi.zadd('userRank:' + fandomName, 0, id);
-                multi.sadd('userBalloonList:' + id, selectedBalloon);
-
-                multi.exec(function (err, rep) {
-                    sendFandomJoinResult(res);
-                });
-            });
-        });
-    }
-
 });
-
 
 /**
  *
@@ -474,15 +423,20 @@ router.post('/login', function (req, res) {
     var id = req.body.id;
 
     var multi = redisClient.multi();
-    multi.select(0);
+    multi.select(0)
+        .exists(getUserInfo() + id)
+        .exec(function (err, rep) {
+            if (err != null)
+                sendErrorMessage(res, SERVER_ERROR);
 
-    multi.exists('userInfo:' + id);
+            var isExisted = rep[1];
+            if (isExisted == 1)
+                sendSucceedMessage(res, LOGIN_SUCCEED);
+            else
+                sendErrorMessage(res, LOGIN_FAIL_ERROR);
 
-    multi.exec(function (err, rep) {
-        var isExisted = rep[1];
-        console.log(isExisted);
-        sendLoginResult(res, isExisted);
-    });
+
+        });
 });
 
 
@@ -494,21 +448,20 @@ router.post('/login', function (req, res) {
  *
  */
 
-router.get('/balloonRankList', function (req, res) {
+router.post('/fandomBalloonRankList', function (req, res) {
 
-    var fandomName = req.query.fandomName;
+    var fandomName = req.body.fandomName;
 
     var multi = redisClient.multi();
-    multi.select(0);
+    multi.select(0)
+        .zrevrange(getFandomBalloonRank() + fandomName, 0, 0)
+        .exec(function (err, reply) {
+            if (err != null)
+                sendErrorMessage(res, SERVER_ERROR);
 
-    multi.zrevrange('balloonColorRank:' + fandomName, 0, 0);
-
-    multi.exec(function (err, reply) {
-        var firstColor = reply[1];
-        var result = {firstBalloon: firstColor[0]}
-        res.send(result);
-    });
-
+            var firstColor = reply[1];
+            res.send(firstColor[0]);
+        });
 });
 
 
@@ -518,17 +471,18 @@ router.get('/balloonRankList', function (req, res) {
  *
  */
 
-router.get('/balloonPriceList', function (req, res) {
+router.get('/balloonColorList', function (req, res) {
 
     var multi = redisClient.multi();
-    multi.select(0);
+    multi.select(0)
+        .smembers(getBalloonColorList())
+        .exec(function (err, rep) {
+            if (err != null)
+                sendErrorMessage(res, SERVER_ERROR);
 
-    multi.hgetall('shopBalloon');
-
-    multi.exec(function (err, reply) {
-        var balloons = reply[1];
-        res.send(balloons);
-    });
+            var balloons = rep[1];
+            res.send(balloons);
+        });
 });
 
 
@@ -540,33 +494,21 @@ router.get('/balloonPriceList', function (req, res) {
 
 router.get('/fandomRankingList', function (req, res) {
     var multi = redisClient.multi();
-    multi.select(0);
+    multi.select(0)
+        .zrevrange(getFandomRank(), 0, -1, 'withscores')
+        .exec(function (err, reply) {
 
-    multi.zrevrange('fandomRank', 0, -1, 'withscores');
+            if (err != null)
+                sendErrorMessage(res, SERVER_ERROR);
 
-    multi.exec(function (err, reply) {
+            var fandomRankList = reply[1];
+            var fandomRankData = {};
 
-        var fandomRankList = reply[1];
-        var fandomRankData = {};
-
-        for (var i = 0; i < fandomRankList.length; i = i + 2) {
-            fandomRankData[fandomRankList[i]] = fandomRankList[i + 1];
-        }
-        res.send(fandomRankData);
-    });
-});
-
-
-/**
- *
- * 팬덤순위에 따른 유저 레벨 받아오기
- *
- */
-
-router.get('/getUserLevelByFandomRank', function (req, res) {
-    var multi = redisClient.multi();
-    multi.select(0);
-
+            for (var i = 0; i < fandomRankList.length; i = i + 2) {
+                fandomRankData[fandomRankList[i]] = fandomRankList[i + 1];
+            }
+            res.send(fandomRankData);
+        });
 });
 
 
