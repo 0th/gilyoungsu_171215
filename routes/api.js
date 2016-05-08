@@ -279,7 +279,7 @@ router.post('/join', function (req, res) {
         selectedSloganText: '',
         selectedBalloonColor: '',
         seledtedBalloonShape: 'basic',
-        level: 5
+        level: 1
     };
 
     var multi = redisClient.multi();
@@ -306,8 +306,8 @@ router.post('/join', function (req, res) {
                         multi.select(1);
 
                         for (var i = 0; i < GAME_BOARD; i++) {
-                            multi.hset('userGameBalloon:' + id, i, 0)
-                                .hset('userStarType:' + id, i, 0);
+                            multi.hset(getUserGameBalloon() + id, i, 0)
+                                .hset(getUserStarType() + id, i, 0);
                         }
 
                         multi.exec(function (err) {
@@ -322,8 +322,13 @@ router.post('/join', function (req, res) {
                 sendErrorMessage(res, ID_REPEATED_ERROR);
         });
 });
+function getUserGameBalloon() {
+    return 'userGameBalloon:'
+}
 
-
+function getUserStarType() {
+    return 'userStarType:';
+}
 /**
  *
  * 팬덤 회원수 정렬 리스트 요청
