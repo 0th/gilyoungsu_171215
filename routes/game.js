@@ -8,18 +8,45 @@ var balloonBlowSpeedSheet = new GoogleSpreadsheet('1GDBrKUfyqo4LAK0BuSyjJ6FETMj3
 var gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
 var hasStarByLevel = new GoogleSpreadsheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
 
-const SHEET_ERROR = 101;
-const SERVER_ERROR = 202;
+const ERROR_SHEET = 101;
+const ERROR_SERVER = 202;
+const SUCCEED_INIT_DB = 701;
+const ERROR_WRONG_INPUT = 505;
+const SUCCEED_REQUEST = 704;
 
-/**
- *
- * DB1 -GameManager
- *
- */
 
+var message = {};
+message[ERROR_SHEET] = "구글 스프레드시트 오류";
+message[SUCCEED_INIT_DB] = "DB 초기화 성공";
+message[ERROR_SERVER] = "서버연결 실패";
+message[ERROR_WRONG_INPUT] = "입력값 오류";
+message[SUCCEED_REQUEST] = "요청 응답 성공";
 
 function sendErrorMessage(res, error) {
-    res.sendStatus(error);
+    res.send({errorCode: error, errorMessage: message[error]});
+}
+
+function sendSucceedMessage(res, succeedMessage) {
+    res.send({succeedCode: succeedMessage, succeedMessage: message[succeedMessage]});
+}
+
+function sendData(res, succeedMessage, sendData) {
+    res.send({succeedCode: succeedMessage, succeedMessage: message[succeedMessage], data: sendData});
+}
+
+function consoleErrorMessage(errorMessage) {
+    console.log({errorCode: errorMessage, errorMessage: message[errorMessage]});
+}
+function consoleSucceedMessage(succeedMessage) {
+    console.log({succeedCode: succeedMessage, succeedMessage: message[succeedMessage]});
+}
+
+function consoleSendData(succeedMessage, sendData) {
+    console.log({succeedCode: succeedMessage, succeedMessage: message[succeedMessage], data: sendData})
+}
+
+function consoleInputLog(body) {
+    console.log(body);
 }
 
 
@@ -31,11 +58,14 @@ function getGameLevelRatio() {
     return 'gameLevelRatio';
 }
 
-function getUserInfo() {
-    return 'userInfo:';
+function getUserInfo(userId) {
+    return 'userInfo:' + userId;
 }
 function getHasStarByLevel() {
     return 'hasStarByLevel';
+}
+function getLevel() {
+    return 'level';
 }
 
 /**
@@ -44,11 +74,14 @@ function getHasStarByLevel() {
  *
  */
 
-router.get('/initBalloonBlowSpeed', function (req, res) {
+router.get('/initBalloonBlowSpeedInfo', function (req, res) {
 
     balloonBlowSpeedSheet.getRows(1, function (err, rowData) {
-        if (err != null)
-            sendErrorMessage(res, SHEET_ERROR);
+        if (err) {
+            sendErrorMessage(res, ERROR_SHEET);
+            consoleErrorMessage(ERROR_SERVER);
+            return;
+        }
 
         var rowKeys = Object.keys(rowData);
 
@@ -60,11 +93,18 @@ router.get('/initBalloonBlowSpeed', function (req, res) {
                 .hset(getGameBlowSpeed(), 'base', rowData[key][keys[3]])
                 .hset(getGameBlowSpeed(), 'full', rowData[key][keys[4]])
                 .hset(getGameBlowSpeed(), 'delay', rowData[key][keys[5]])
-                .exec(function (error) {
-                    if (error != null)
-                        sendErrorMessage(res, SERVER_ERROR);
+                .exec(function (err) {
+                    if (err) {
+                        sendErrorMessage(res, ERROR_SERVER);
+                        consoleErrorMessage(ERROR_SERVER);
+                        return;
+                    }
                 });
-        })
+
+            sendSucceedMessage(res, SUCCEED_INIT_DB);
+            consoleSucceedMessage(SUCCEED_INIT_DB);
+
+        });
     });
 });
 
@@ -79,8 +119,11 @@ router.get('/initLevelRatio', function (req, res) {
 
     gameLevelRatioSheet.getRows(1, function (err, rowData) {
 
-        if (err != null)
-            sendErrorMessage(res, SHEET_ERROR);
+        if (err) {
+            sendErrorMessage(res, ERROR_SHEET);
+            consoleErrorMessage(ERROR_SERVER);
+            return;
+        }
 
         var rowKeys = Object.keys(rowData);
 
@@ -91,10 +134,15 @@ router.get('/initLevelRatio', function (req, res) {
             multi.select(1)
                 .hset(getGameLevelRatio(), rowData[key][keys[3]], rowData[key][keys[4]])
                 .exec(function (error) {
-                    if (error != null)
-                        sendErrorMessage(res, SERVER_ERROR);
+                    if (err) {
+                        sendErrorMessage(res, ERROR_SERVER);
+                        consoleErrorMessage(ERROR_SERVER);
+                        return;
+                    }
                 });
-        })
+        });
+        sendSucceedMessage(res, SUCCEED_INIT_DB);
+        consoleSucceedMessage(SUCCEED_INIT_DB);
     });
 });
 
@@ -108,8 +156,11 @@ router.get('/initHasStarByLevel', function (req, res) {
 
     hasStarByLevel.getRows(1, function (err, rowData) {
 
-        if (err != null)
-            sendErrorMessage(res, SHEET_ERROR);
+        if (err) {
+            sendErrorMessage(res, ERROR_SHEET);
+            consoleErrorMessage(ERROR_SERVER);
+            return;
+        }
 
         var rowKeys = Object.keys(rowData);
 
@@ -119,11 +170,17 @@ router.get('/initHasStarByLevel', function (req, res) {
             var multi = redisClient.multi();
             multi.select(1)
                 .hset(getHasStarByLevel(), rowData[key][keys[3]], rowData[key][keys[4]])
-                .exec(function (error) {
-                    if (error != null)
-                        sendErrorMessage(res, SERVER_ERROR);
+                .exec(function (err) {
+                    if (err) {
+                        sendErrorMessage(res, ERROR_SERVER);
+                        consoleErrorMessage(ERROR_SERVER);
+                        return;
+                    }
                 });
-        })
+        });
+
+        sendSucceedMessage(res, SUCCEED_INIT_DB);
+        consoleSucceedMessage(SUCCEED_INIT_DB);
     });
 });
 
@@ -136,26 +193,40 @@ router.get('/initHasStarByLevel', function (req, res) {
  */
 
 router.post('/userHaveStarNumber', function (req, res) {
+    consoleInputLog(req.body);
     var id = req.body.id;
+    if (!id) {
+        sendErrorMessage(res, ERROR_WRONG_INPUT);
+        consoleErrorMessage(ERROR_WRONG_INPUT);
+        return;
+    }
 
     var multi = redisClient.multi();
     multi.select(0)
-        .hget(getUserInfo() + id, 'level')
+        .hget(getUserInfo(id), getLevel())
         .exec(function (err, rep) {
-            if (err != null)
-                sendErrorMessage(res, SERVER_ERROR);
+            if (err) {
+                sendErrorMessage(res, ERROR_SERVER);
+                consoleErrorMessage(ERROR_SERVER);
+                return;
+            }
 
             var userLevel = rep[1];
 
             var multi = redisClient.multi();
             multi.select(1)
                 .hget(getHasStarByLevel(), userLevel)
-                .exec(function (error, reply) {
-                    if (error != null)
-                        sendErrorMessage(res, SERVER_ERROR);
+                .exec(function (err, reply) {
+                    if (err) {
+                        sendErrorMessage(res, ERROR_SERVER);
+                        consoleErrorMessage(ERROR_SERVER);
+                        return;
+                    }
 
                     var userHaveStarNumber = reply[1];
-                    res.send(userHaveStarNumber);
+
+                    sendData(res, SUCCEED_REQUEST, userHaveStarNumber);
+                    consoleSendData(SUCCEED_REQUEST, userHaveStarNumber);
                 });
         });
 });
