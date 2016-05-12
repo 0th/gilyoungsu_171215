@@ -1119,7 +1119,7 @@ router.post('/gameStart', function (req, res) {
                                     'smallStar': competitorHasStarNumber % 10
                                 };
 
-                                var result = [];
+                                var result = {};
                                 result[getFieldCompetitorInfo()] = competitorInfo;
                                 result[getFieldCompetitorGameInfos()] = competitorGameInfos;
                                 result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
