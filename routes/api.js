@@ -13,6 +13,22 @@ var logger = require('../functions/logger');
 
 const GAME_BOARD = 36;
 
+const GAME_MANAGER = {
+    id: 'GAME_MANAGER',
+    coinCount: 0,
+    balloonCount: 0,
+    starCount: 0,
+    fandomName: 'Base',
+    hasSlogan: 0,
+    selectedSloganColor: '',
+    selectedSloganText: '',
+    selectedBalloonColor: '분홍',
+    selectedBalloonShape: 'basic',
+    level: 3
+};
+const GAME_MANAGER_STAR_INFO = [2, 2, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 2, 2, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+const GAME_MANAGER_GAME_BALLOON_INFO = 10;
+
 const ERROR_SHEET = 101;
 const ERROR_SERVER = 202;
 const ERROR_ID_REPEATED = 303;
@@ -25,13 +41,13 @@ const ERROR_JOIN_FANDOM_FAIL = 408;
 const ERROR_INIT_GAME_INFO_FAIL = 409;
 const ERROR_LOGIN_FAIL = 401;
 const ERROR_DATA_NOT_EXIST = 402;
+const ERROR_SLOGAN_NOT_PURCAHSE = 808;
 const SUCCEED_JOIN = 700;
 const SUCCEED_JOIN_FANDOM = 707;
 const SUCCEED_LOGIN = 708;
 const SUCCEED_INIT_DB = 701;
 const SUCCEED_FANDOM_USER_NUMBER_RANK_REQUEST = 702;
 const SUCCEED_REQUEST = 704;
-
 
 var message = {};
 message[ERROR_SHEET] = "구글 스프레드시트 오류";
@@ -50,6 +66,7 @@ message[ERROR_DATA_NOT_EXIST] = "DB 데이터가 존재하지 않습니다";
 message[ERROR_LOGIN_FAIL] = "회원가입이 되어있지 않습니다";
 message[SUCCEED_LOGIN] = "로그인 성공";
 message[SUCCEED_REQUEST] = "요청 응답 성공";
+message[ERROR_SLOGAN_NOT_PURCAHSE] = "슬로건을 구입하지 않은 사용자입니다";
 
 /**
  *
@@ -117,7 +134,12 @@ function getSloganColor() {
 function getShopBalloon() {
     return 'shopBalloon';
 }
-
+function getUserListForGame(fandomName) {
+    return 'userListForGame:' + fandomName;
+}
+function getFandomUserNumberForGame() {
+    return 'fandomUserNumberForGame';
+}
 function getFandomBalloonRank(fandomName) {
     return 'fandomBalloonRank:' + fandomName;
 }
@@ -185,6 +207,41 @@ function getFieldSelectedBalloonColor() {
     return 'selectedBalloonColor';
 }
 
+function getFieldUserLevel() {
+    return 'level';
+}
+
+function getFieldCompetitorInfo() {
+    return 'competitorInfo';
+}
+function getFieldCompetitorGameInfos() {
+    return 'competitorGameInfos';
+}
+
+function getFieldCompetitorGameCountInfo() {
+    return 'competitorGameCountInfo';
+}
+function getFieldGamingNow() {
+    return 'GAMING_NOW';
+}
+
+function getFieldHasSlogan() {
+    return 'hasSlogan';
+}
+
+function getFieldSelectedSloganText() {
+    return 'selectedSloganText';
+}
+
+function getFieldSelectedSloganColor() {
+    return 'selectedSloganColor';
+}
+
+function getFieldSelectedBalloonShape() {
+    return 'selectedBalloonShape';
+}
+
+
 /**
  *
  *  팬덤리스트 초기화
@@ -209,6 +266,7 @@ router.get('/initFandomUserNumber', function (req, res) {
             var multi = redisClient.multi();
             multi.select(0)
                 .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]])
+                .zadd(getFandomUserNumberForGame(), 0, rowData[key][keys[5]])
                 .exec(function (err) {
                     if (err) {
                         sendErrorMessage(res, ERROR_SERVER);
@@ -443,14 +501,15 @@ router.post('/join', function (req, res) {
     }
 
     var user = {
+        id: id,
         coinCount: 0,
         balloonCount: 0,
         starCount: 0,
         fandomName: '',
         hasSlogan: 0,
-        selectedSloganColor: '',
+        selectedSloganColor: '분홍',
         selectedSloganText: '',
-        selectedBalloonColor: '',
+        selectedBalloonColor: '분홍',
         selectedBalloonShape: 'basic',
         level: 1
     };
@@ -529,6 +588,7 @@ router.get('/fandomUserNumberRank', function (req, res) {
                 fandomUserNumberRank[fandomList[i]] = fandomList[i + 1];
             }
 
+
             sendData(res, SUCCEED_FANDOM_USER_NUMBER_RANK_REQUEST, fandomUserNumberRank);
             consoleSendData(SUCCEED_FANDOM_USER_NUMBER_RANK_REQUEST, fandomUserNumberRank);
         });
@@ -596,6 +656,8 @@ router.post('/joinFandom', function (req, res) {
                         .hmset(getUserInfo(id), 'fandomName', fandomName, 'selectedBalloonColor', selectedBalloonColor, 'level', userLevel)
                         .zincrby(getFandomBalloonRank(fandomName), 1, selectedBalloonColor)
                         .zadd(getUserRank(fandomName), 0, id)
+                        .sadd(getUserListForGame(fandomName), id)
+                        .zincrby(getFandomUserNumberForGame(), 1, fandomName)
                         .zincrby(getFandomUserNumber(), 1, fandomName)
                         .exec(function (err) {
                             if (err) {
@@ -713,13 +775,15 @@ router.get('/fandomBaseInfo', function (req, res) {
             multi.select(0);
 
             for (var i = 0; i < fandomRankList.length; i = i + 2) {
-                var fandomBaseData = {};
-                fandomBaseData[getFieldFandomName()] = fandomRankList[i];
-                fandomBaseData[getFieldScore()] = fandomRankList[i + 1];
-                datas.push(fandomBaseData);
+                if (fandomRankList[i] != getFieldGamingNow()) {
+                    var fandomBaseData = {};
+                    fandomBaseData[getFieldFandomName()] = fandomRankList[i];
+                    fandomBaseData[getFieldScore()] = fandomRankList[i + 1];
+                    datas.push(fandomBaseData);
 
-                multi.zscore(getFandomUserNumber(), fandomRankList[i])
-                    .zrevrange(getFandomBalloonRank(fandomRankList[i]), 0, 0);
+                    multi.zscore(getFandomUserNumber(), fandomRankList[i])
+                        .zrevrange(getFandomBalloonRank(fandomRankList[i]), 0, 0);
+                }
             }
 
             multi.exec(function (err, rep) {
@@ -917,8 +981,6 @@ router.post('/allUserRankInFandom', function (req, res) {
                 consoleSendData(SUCCEED_REQUEST, userRankInFandom);
 
             });
-
-
         });
 });
 
@@ -955,7 +1017,6 @@ router.post('/userBalloonList', function (req, res) {
             consoleSendData(SUCCEED_REQUEST, userBalloonList);
         });
 });
-
 
 /**
  *
@@ -995,29 +1056,12 @@ router.post('/userInfo', function (req, res) {
 });
 
 
-function getFieldUserLevel() {
-    return 'level';
-}
-
-function getFieldCompetitorInfo() {
-    return 'competitorInfo';
-}
-function getFieldCompetitorGameInfos() {
-    return 'competitorGameInfos';
-}
-
-
-function getFieldCompetitorGameCountInfo() {
-    return 'competitorGameCountInfo'
-}
 /**
- *
  *
  * 게임 시작 요청 (랜덤 매칭)
  * @fandomName
  *
  */
-
 
 router.post('/gameStart', function (req, res) {
 
@@ -1033,7 +1077,7 @@ router.post('/gameStart', function (req, res) {
     var multi = redisClient.multi();
 
     multi.select(0)
-        .zrange(getFandomUserNumber(), 0, -1, 'withscores')
+        .zrange(getFandomUserNumberForGame(), 0, -1, 'withscores')
         .exec(function (err, reply) {
 
             if (err) {
@@ -1048,12 +1092,44 @@ router.post('/gameStart', function (req, res) {
             for (var i = 0; i < fandomUserNumbers.length; i = i + 2) {
                 var fandomName = fandomUserNumbers[i];
                 var userNumber = fandomUserNumbers[i + 1];
-                if (userNumber != 0 && userFandomName != fandomName) {
+                if (userNumber != 0 && userFandomName != fandomName && fandomName != getFieldGamingNow()) {
                     var fandomInfo = {};
                     fandomInfo[getFieldFandomName()] = fandomName;
                     fandomInfo[getFieldUserNumber()] = userNumber;
                     fandomExistingUserList.push(fandomInfo);
                 }
+            }
+
+
+            if (fandomExistingUserList.length == 0) {
+                var competitorGameBaseInfos = [];
+                var competitorTotalBalloon = 0;
+
+                for (var i = 0; i < GAME_BOARD; i++) {
+                    var baseGameInfo = {};
+                    baseGameInfo[getFieldGameBalloon()] = GAME_MANAGER_GAME_BALLOON_INFO;
+                    baseGameInfo[getFieldStarType()] = GAME_MANAGER_STAR_INFO[i];
+                    competitorTotalBalloon += GAME_MANAGER_GAME_BALLOON_INFO;
+                    competitorGameBaseInfos.push(baseGameInfo);
+                }
+
+                var competitorLevel = GAME_MANAGER[getFieldUserLevel()];
+                var competitorHasStarNumber = getUserHasStarNumber(competitorLevel);
+                var competitorGameCountInfo = {
+                    'totalBalloon': competitorTotalBalloon,
+                    'bigStar': parseInt(competitorHasStarNumber / 10),
+                    'smallStar': competitorHasStarNumber % 10
+                };
+
+
+                var result = {};
+                result[getFieldCompetitorInfo()] = GAME_MANAGER;
+                result[getFieldCompetitorGameInfos()] = competitorGameBaseInfos;
+                result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
+
+                sendData(res, SUCCEED_REQUEST, result);
+                consoleSendData(SUCCEED_REQUEST, JSON.stringify(result));
+                return;
             }
 
             var randomIndex = makeRandom(0, fandomExistingUserList.length - 1);
@@ -1062,8 +1138,8 @@ router.post('/gameStart', function (req, res) {
 
             var multi = redisClient.multi();
             multi.select(0)
-                .zrange(getUserRank(competitorFandomName), 0, -1)
-                .exec(function (err, rep) {
+                .srandmember(getUserListForGame(competitorFandomName))
+                .exec(function (err, reply) {
 
                     if (err) {
                         sendErrorMessage(res, ERROR_SERVER);
@@ -1071,7 +1147,7 @@ router.post('/gameStart', function (req, res) {
                         return;
                     }
 
-                    var competitorId = rep[1];
+                    var competitorId = reply[1];
                     var multi = redisClient.multi();
                     multi.select(0)
                         .hgetall(getUserInfo(competitorId))
@@ -1102,31 +1178,45 @@ router.post('/gameStart', function (req, res) {
                                 }
 
                                 var competitorGameInfos = [];
-                                var copetitorTotalBalloon = 0;
+                                var competitorTotalBalloon = 0;
 
                                 for (var i = 1; i < replies.length; i++) {
                                     if (i <= GAME_BOARD)
                                         competitorGameInfos.push(replies[i]);
                                     else
-                                        copetitorTotalBalloon += parseInt(replies[i]);
+                                        competitorTotalBalloon += parseInt(replies[i]);
                                 }
 
                                 var competitorLevel = competitorInfo[getFieldUserLevel()];
                                 var competitorHasStarNumber = getUserHasStarNumber(competitorLevel);
                                 var competitorGameCountInfo = {
-                                    'totalBalloon': copetitorTotalBalloon,
+                                    'totalBalloon': competitorTotalBalloon,
                                     'bigStar': parseInt(competitorHasStarNumber / 10),
                                     'smallStar': competitorHasStarNumber % 10
                                 };
 
-                                var result = [];
+                                var result = {};
                                 result[getFieldCompetitorInfo()] = competitorInfo;
                                 result[getFieldCompetitorGameInfos()] = competitorGameInfos;
                                 result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
 
-                                sendData(res, SUCCEED_REQUEST, result);
-                                consoleSendData(SUCCEED_REQUEST, result);
+                                var multi = redisClient.multi();
+                                multi.select(0)
+                                    .zincrby(getFandomUserNumberForGame(), -1, competitorFandomName)
+                                    .zincrby(getFandomUserNumberForGame(), 1, getFieldGamingNow())
+                                    .srem(getUserListForGame(competitorFandomName), competitorId)
+                                    .sadd(getUserListForGame(getFieldGamingNow()), competitorId)
+                                    .exec(function (err) {
+                                        if (err) {
+                                            sendErrorMessage(res, ERROR_SERVER);
+                                            consoleErrorMessage(ERROR_SERVER);
+                                            return;
+                                        }
 
+                                        sendData(res, SUCCEED_REQUEST, result);
+                                        consoleSendData(SUCCEED_REQUEST, JSON.stringify(result));
+
+                                    });
                             });
                         });
                 });
@@ -1175,6 +1265,180 @@ router.post('/main', function (req, res) {
         consoleSendData(SUCCEED_REQUEST, userGameInfo);
 
     });
+});
+
+
+/**
+ *
+ * 슬로건 색 및 텍스트 변경
+ * @id
+ *
+ * <추가>
+ * @selectedSloganText
+ * @selectedSloganColor
+ *
+ */
+
+router.post('/settingSlogan', function (req, res) {
+    consoleInputLog(req.body);
+    var id = req.body.id;
+
+    if (!id) {
+        sendErrorMessage(res, ERROR_WRONG_INPUT);
+        consoleErrorMessage(ERROR_WRONG_INPUT);
+        return;
+    }
+
+    var multi = redisClient.multi();
+    multi.select(0)
+        .hget(getUserInfo(id), getFieldHasSlogan())
+        .exec(function (err, reply) {
+            var hasSlogan = reply[1];
+            if (hasSlogan == 0) {
+                sendErrorMessage(res, ERROR_SLOGAN_NOT_PURCAHSE);
+                consoleErrorMessage(ERROR_SLOGAN_NOT_PURCAHSE);
+                return;
+            } else {
+                var selectedSloganText = req.body.selectedSloganText;
+                var selectedSloganColor = req.body.selectedSloganColor;
+
+                if (!selectedSloganText || !selectedSloganColor) {
+                    sendErrorMessage(res, ERROR_WRONG_INPUT);
+                    consoleErrorMessage(ERROR_WRONG_INPUT);
+                    return;
+                }
+
+                var multi = redisClient.multi();
+                multi.select(0)
+                    .hmset(getUserInfo(id), getFieldSelectedSloganColor(), selectedSloganColor,
+                        getFieldSelectedSloganText(), selectedSloganText)
+                    .exec(function (err) {
+
+                        if (err) {
+                            sendErrorMessage(res, ERROR_SERVER);
+                            consoleErrorMessage(ERROR_SERVER);
+                            return;
+                        }
+                        sendSucceedMessage(res, SUCCEED_REQUEST);
+                        consoleSucceedMessage(SUCCEED_REQUEST);
+
+                    });
+            }
+        });
+});
+
+
+/**
+ *
+ * 풍선 색 및 모양 변경
+ *
+ * @id
+ * @selectedBalloonShape
+ * @selectedBalloonColor
+ *
+ */
+
+router.post('/settingBalloon', function (req, res) {
+
+    consoleInputLog(req.body);
+
+    var id = req.body.id;
+    var selectedBalloonShape = req.body.selectedBalloonShape;
+    var selectedBalloonColor = req.body.selectedBalloonColor;
+
+    if (!id || !selectedBalloonShape || !selectedBalloonColor) {
+        sendErrorMessage(res, ERROR_WRONG_INPUT);
+        consoleErrorMessage(ERROR_WRONG_INPUT);
+        return;
+    }
+
+    var multi = redisClient.multi();
+    multi.select(0)
+        .hmset(getUserInfo(id), getFieldSelectedBalloonShape(), selectedBalloonShape, getFieldSelectedBalloonColor(), selectedBalloonColor)
+        .exec(function (err) {
+
+            if (err) {
+                sendErrorMessage(res, ERROR_SERVER);
+                consoleErrorMessage(ERROR_SERVER);
+                return;
+            }
+
+            sendSucceedMessage(res, SUCCEED_REQUEST);
+            consoleSucceedMessage(SUCCEED_REQUEST);
+        });
+});
+
+/**
+ *
+ * 슬로건 구매
+ *
+ * @id
+ * @selectedSloganColor
+ * @selectedSloganText
+ *
+ */
+
+router.post('/purchaseSlogan', function (req, res) {
+    consoleInputLog(req.body);
+    var id = req.body.id;
+
+    if (!id) {
+        sendErrorMessage(res, ERROR_WRONG_INPUT);
+        consoleErrorMessage(ERROR_WRONG_INPUT);
+        return;
+    }
+
+    var multi = redisClient.multi();
+    multi.select(0)
+        .hset(getUserInfo(id), getFieldHasSlogan(), 1)
+        .exec(function (err) {
+            if (err) {
+                sendErrorMessage(res, ERROR_SERVER);
+                consoleErrorMessage(ERROR_SERVER);
+                return;
+            }
+            sendSucceedMessage(res, SUCCEED_REQUEST);
+            consoleSucceedMessage(SUCCEED_REQUEST);
+        });
+});
+
+
+/**
+ *
+ * 풍선모양 구매
+ *
+ * @id
+ * @purchasedBalloonShape
+ *
+ */
+
+router.post('/purchaseBalloon', function (req, res) {
+
+    consoleInputLog(req.body);
+
+    var id = req.body.id;
+    var purchasedBalloonShape = req.body.purchasedBalloonShape;
+
+    if (!id || !purchasedBalloonShape) {
+        sendErrorMessage(res, ERROR_WRONG_INPUT);
+        consoleErrorMessage(ERROR_WRONG_INPUT);
+        return;
+    }
+
+    var multi = redisClient.multi();
+    multi.select(0)
+        .sadd(getUserBalloonList(id), purchasedBalloonShape)
+        .exec(function (err) {
+
+            if (err) {
+                sendErrorMessage(res, ERROR_SERVER);
+                consoleErrorMessage(ERROR_SERVER);
+                return;
+            }
+
+            sendSucceedMessage(res, SUCCEED_REQUEST);
+            consoleSucceedMessage(SUCCEED_REQUEST);
+        });
 });
 
 

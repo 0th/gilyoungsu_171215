@@ -13,7 +13,7 @@ const ERROR_SERVER = 202;
 const SUCCEED_INIT_DB = 701;
 const ERROR_WRONG_INPUT = 505;
 const SUCCEED_REQUEST = 704;
-
+const GAME_BOARD = 36;
 
 var message = {};
 message[ERROR_SHEET] = "구글 스프레드시트 오류";
@@ -49,7 +49,6 @@ function consoleInputLog(body) {
     console.log(body);
 }
 
-
 function getGameBlowSpeed() {
     return 'gameBlowSpeed';
 }
@@ -64,8 +63,25 @@ function getUserInfo(userId) {
 function getHasStarByLevel() {
     return 'hasStarByLevel';
 }
+
 function getLevel() {
     return 'level';
+}
+
+function getFieldCoinCount() {
+    return 'coinCount';
+}
+
+function getFieldBalloonCount() {
+    return 'balloonCount';
+}
+
+function getFieldStarCount() {
+    return 'starCount';
+}
+
+function getUserGameInfo(userId, index) {
+    return 'userGameInfo:' + userId + ':' + index;
 }
 
 /**
@@ -74,6 +90,15 @@ function getLevel() {
  *
  */
 
+function getFieldBase() {
+    return 'base';
+}
+function getFieldFull() {
+    return 'full';
+}
+function getFieldDelay() {
+    return 'delay';
+}
 router.get('/initBalloonBlowSpeedInfo', function (req, res) {
 
     balloonBlowSpeedSheet.getRows(1, function (err, rowData) {
@@ -90,9 +115,9 @@ router.get('/initBalloonBlowSpeedInfo', function (req, res) {
 
             var multi = redisClient.multi();
             multi.select(1)
-                .hset(getGameBlowSpeed(), 'base', rowData[key][keys[3]])
-                .hset(getGameBlowSpeed(), 'full', rowData[key][keys[4]])
-                .hset(getGameBlowSpeed(), 'delay', rowData[key][keys[5]])
+                .hset(getGameBlowSpeed(), getFieldBase(), rowData[key][keys[3]])
+                .hset(getGameBlowSpeed(), getFieldFull(), rowData[key][keys[4]])
+                .hset(getGameBlowSpeed(), getFieldDelay(), rowData[key][keys[5]])
                 .exec(function (err) {
                     if (err) {
                         sendErrorMessage(res, ERROR_SERVER);
@@ -187,7 +212,6 @@ router.get('/initHasStarByLevel', function (req, res) {
 /**
  *
  * 유저 레벨에 따른 별 보유개수 요청
- *
  * @id
  *
  */
@@ -230,6 +254,58 @@ router.post('/userHaveStarNumber', function (req, res) {
                 });
         });
 });
+
+/**
+ *
+ * 게임 끝난 후 요청
+ *
+ * @userId
+ * @userGetStarCount
+ * @userGetCoinCount
+ * @userGetBalloonCount
+ * @competitorId
+ * @competitorGameInfo
+ *
+ */
+
+router.post('/gameOver', function (req, res) {
+    consoleInputLog(req.body);
+
+    var userId = req.body.userID;
+    var userGetStarCount = req.body.userGetStarCount;
+    var userGetCoinCount = req.body.userGetCoinCount;
+    var userGetBalloonCount = req.body.userGetBalloonCount;
+    var competitorId = req.body.competitorId;
+    var competitorGameInfo = req.body.competitorGameInfo;
+
+    if (!userId || !userGetStarCount || !userGetCoinCount
+        || !userGetBalloonCount || !competitorId || !competitorGameInfo) {
+        consoleErrorMessage(ERROR_WRONG_INPUT);
+        sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+    var multi = redisClient.multi();
+    multi.select(0)
+        .hincrby(getUserInfo(userId), getFieldStarCount(), userGetStarCount)
+        .hincrby(getUserInfo(userId), getFieldBalloonCount(), userGetBalloonCount)
+        .hincrby(getUserInfo(userId), getFieldCoinCount(), userGetCoinCount);
+    for (var i = 0; i < GAME_BOARD; i++)
+        multi.hmset(getUserGameInfo(competitorId, i), competitorGameInfo[i]);
+
+    multi.exec(function (err) {
+        if (err) {
+            sendErrorMessage(res, ERROR_SERVER);
+            consoleErrorMessage(ERROR_SERVER);
+            return;
+        }
+
+        sendSucceedMessage(res, SUCCEED_REQUEST);
+        consoleSucceedMessage(SUCCEED_REQUEST);
+    });
+});
+
+
 
 
 module.exports = router;
