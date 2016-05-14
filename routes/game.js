@@ -305,7 +305,43 @@ router.post('/gameOver', function (req, res) {
     });
 });
 
+/**
+ *
+ * 방어모드 셋팅
+ * @userId
+ * @competitorGameInfo
+ *
+ */
 
+router.post('/settingDefenseMode', function (req, res) {
+    consoleInputLog(req.body);
+
+    var userId = req.body.userId;
+    var userGameInfo = req.body.userGameInfo;
+
+    if (!userId || !userGameInfo) {
+        consoleErrorMessage(ERROR_WRONG_INPUT);
+        sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+    var multi = redisClient.multi();
+    multi.select(0);
+    for (var i = 0; i < GAME_BOARD; i++)
+        multi.hmset(getUserGameInfo(userId, i), userGameInfo[i]);
+
+    multi.exec(function (err) {
+        if (err) {
+            sendErrorMessage(res, ERROR_SERVER);
+            consoleErrorMessage(ERROR_SERVER);
+            return;
+        }
+
+        sendSucceedMessage(res, SUCCEED_REQUEST);
+        consoleSucceedMessage(SUCCEED_REQUEST);
+    });
+
+});
 
 
 module.exports = router;
