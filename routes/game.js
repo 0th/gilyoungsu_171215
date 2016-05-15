@@ -6,47 +6,80 @@ var _ = require('underscore');
 var GoogleSpreadsheet = require("google-spreadsheet");
 var balloonBlowSpeedSheet = new GoogleSpreadsheet('1GDBrKUfyqo4LAK0BuSyjJ6FETMj3yljxUVyHYCLnPxk');
 var gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
-var hasStarByLevel = new GoogleSpreadsheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
+var hasStarByLevelSheet = new GoogleSpreadsheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
 
 const ERROR_SHEET = 101;
 const ERROR_SERVER = 202;
 const SUCCEED_INIT_DB = 701;
 const ERROR_WRONG_INPUT = 505;
-const SUCCEED_REQUEST = 704;
+const SUCCEED_RESPONSE = 704;
 const GAME_BOARD = 36;
+
+
+/*const GAME_MANAGER = {
+ id: 'GAME_MANAGER',
+ coinCount: 0,
+ balloonCount: 0,
+ starCount: 0,
+ fandomName: 'Base',
+ hasSlogan: 0,
+ selectedSloganColor: '',
+ selectedSloganText: '',
+ selectedBalloonColor: '분홍',
+ selectedBalloonShape: 'basic',
+ level: 3
+ };
+ const GAME_MANAGER_STAR_INFO = [2, 2, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 2, 2, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+ const GAME_MANAGER_GAME_BALLOON_INFO = 10;*/
+
 
 var message = {};
 message[ERROR_SHEET] = "구글 스프레드시트 오류";
 message[SUCCEED_INIT_DB] = "DB 초기화 성공";
 message[ERROR_SERVER] = "서버연결 실패";
 message[ERROR_WRONG_INPUT] = "입력값 오류";
-message[SUCCEED_REQUEST] = "요청 응답 성공";
+message[SUCCEED_RESPONSE] = "요청 응답 성공";
 
-function sendErrorMessage(res, error) {
-    res.send({errorCode: error, errorMessage: message[error]});
-}
-
-function sendSucceedMessage(res, succeedMessage) {
-    res.send({succeedCode: succeedMessage, succeedMessage: message[succeedMessage]});
-}
-
-function sendData(res, succeedMessage, sendData) {
-    res.send({succeedCode: succeedMessage, succeedMessage: message[succeedMessage], data: sendData});
+function addMethod(object, functionName, func) {
+    var overloadingFunction = object[functionName];
+    object[functionName] = function () {
+        if (func.length == arguments.length)
+            return func.apply(this, arguments);
+        else if (typeof overloadingFunction == 'function')
+            return overloadingFunction.apply(this, arguments);
+    };
 }
 
-function consoleErrorMessage(errorMessage) {
-    console.log({errorCode: errorMessage, errorMessage: message[errorMessage]});
-}
-function consoleSucceedMessage(succeedMessage) {
-    console.log({succeedCode: succeedMessage, succeedMessage: message[succeedMessage]});
+function SendMessage() {
+    addMethod(this, "sendSucceedMessage", function (res, succeedCode) {
+        res.send({succeedCode: succeedCode});
+        console.log({succeedCode: succeedCode});
+    });
+
+    addMethod(this, "sendSucceedMessage", function (res, succeedCode, sendData) {
+        res.send({succeedCode: succeedCode, data: sendData});
+        console.log({succeedCode: succeedCode, data: sendData})
+    });
+
+    addMethod(this, "sendErrorMessage", function (res, errorCode) {
+        res.send({errorCode: errorCode, errorMessage: message[errorCode]});
+        console.log({errorCode: errorCode, errorMessage: message[errorCode]});
+    });
 }
 
-function consoleSendData(succeedMessage, sendData) {
-    console.log({succeedCode: succeedMessage, succeedMessage: message[succeedMessage], data: sendData})
-}
+var sendMessage = new SendMessage();
 
 function consoleInputLog(body) {
     console.log(body);
+}
+
+function makeRandom(min, max) {
+    var randomNumber = Math.random() * (max - min) + min;
+    return Math.floor(randomNumber);
+}
+
+function getFandomRank() {
+    return 'fandomRank';
 }
 
 function getGameBlowSpeed() {
@@ -99,12 +132,12 @@ function getFieldFull() {
 function getFieldDelay() {
     return 'delay';
 }
+
 router.get('/initBalloonBlowSpeedInfo', function (req, res) {
 
     balloonBlowSpeedSheet.getRows(1, function (err, rowData) {
         if (err) {
-            sendErrorMessage(res, ERROR_SHEET);
-            consoleErrorMessage(ERROR_SERVER);
+            sendMessage.sendErrorMessage(res, ERROR_SHEET);
             return;
         }
 
@@ -115,21 +148,16 @@ router.get('/initBalloonBlowSpeedInfo', function (req, res) {
 
             var multi = redisClient.multi();
             multi.select(1)
-                .hset(getGameBlowSpeed(), getFieldBase(), rowData[key][keys[3]])
-                .hset(getGameBlowSpeed(), getFieldFull(), rowData[key][keys[4]])
-                .hset(getGameBlowSpeed(), getFieldDelay(), rowData[key][keys[5]])
+                .hmset(getGameBlowSpeed(), getFieldBase(), rowData[key][keys[3]]
+                    , getFieldFull(), rowData[key][keys[4]], getFieldDelay(), rowData[key][keys[5]])
                 .exec(function (err) {
                     if (err) {
-                        sendErrorMessage(res, ERROR_SERVER);
-                        consoleErrorMessage(ERROR_SERVER);
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER);
                         return;
                     }
                 });
-
-            sendSucceedMessage(res, SUCCEED_INIT_DB);
-            consoleSucceedMessage(SUCCEED_INIT_DB);
-
         });
+        sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
     });
 });
 
@@ -145,8 +173,7 @@ router.get('/initLevelRatio', function (req, res) {
     gameLevelRatioSheet.getRows(1, function (err, rowData) {
 
         if (err) {
-            sendErrorMessage(res, ERROR_SHEET);
-            consoleErrorMessage(ERROR_SERVER);
+            sendMessage.sendErrorMessage(res, ERROR_SHEET);
             return;
         }
 
@@ -158,16 +185,14 @@ router.get('/initLevelRatio', function (req, res) {
             var multi = redisClient.multi();
             multi.select(1)
                 .hset(getGameLevelRatio(), rowData[key][keys[3]], rowData[key][keys[4]])
-                .exec(function (error) {
+                .exec(function (err) {
                     if (err) {
-                        sendErrorMessage(res, ERROR_SERVER);
-                        consoleErrorMessage(ERROR_SERVER);
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER);
                         return;
                     }
                 });
         });
-        sendSucceedMessage(res, SUCCEED_INIT_DB);
-        consoleSucceedMessage(SUCCEED_INIT_DB);
+        sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
     });
 });
 
@@ -179,11 +204,10 @@ router.get('/initLevelRatio', function (req, res) {
 
 router.get('/initHasStarByLevel', function (req, res) {
 
-    hasStarByLevel.getRows(1, function (err, rowData) {
+    hasStarByLevelSheet.getRows(1, function (err, rowData) {
 
         if (err) {
-            sendErrorMessage(res, ERROR_SHEET);
-            consoleErrorMessage(ERROR_SERVER);
+            sendMessage.sendErrorMessage(res, ERROR_SHEET);
             return;
         }
 
@@ -197,17 +221,17 @@ router.get('/initHasStarByLevel', function (req, res) {
                 .hset(getHasStarByLevel(), rowData[key][keys[3]], rowData[key][keys[4]])
                 .exec(function (err) {
                     if (err) {
-                        sendErrorMessage(res, ERROR_SERVER);
-                        consoleErrorMessage(ERROR_SERVER);
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER);
                         return;
                     }
                 });
         });
-
-        sendSucceedMessage(res, SUCCEED_INIT_DB);
-        consoleSucceedMessage(SUCCEED_INIT_DB);
+        sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
     });
 });
+
+//--------------------------------- 초기화  -----------------------------------//
+
 
 /**
  *
@@ -217,11 +241,12 @@ router.get('/initHasStarByLevel', function (req, res) {
  */
 
 router.post('/userHaveStarNumber', function (req, res) {
+
     consoleInputLog(req.body);
+
     var id = req.body.id;
     if (!id) {
-        sendErrorMessage(res, ERROR_WRONG_INPUT);
-        consoleErrorMessage(ERROR_WRONG_INPUT);
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
@@ -230,8 +255,7 @@ router.post('/userHaveStarNumber', function (req, res) {
         .hget(getUserInfo(id), getLevel())
         .exec(function (err, rep) {
             if (err) {
-                sendErrorMessage(res, ERROR_SERVER);
-                consoleErrorMessage(ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER);
                 return;
             }
 
@@ -241,25 +265,265 @@ router.post('/userHaveStarNumber', function (req, res) {
             multi.select(1)
                 .hget(getHasStarByLevel(), userLevel)
                 .exec(function (err, reply) {
+
                     if (err) {
-                        sendErrorMessage(res, ERROR_SERVER);
-                        consoleErrorMessage(ERROR_SERVER);
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER);
                         return;
                     }
 
                     var userHaveStarNumber = reply[1];
 
-                    sendData(res, SUCCEED_REQUEST, userHaveStarNumber);
-                    consoleSendData(SUCCEED_REQUEST, userHaveStarNumber);
+                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, userHaveStarNumber);
+
                 });
         });
 });
+
+
+/**
+ *
+ * 게임 시작 요청 (랜덤 매칭)
+ * @fandomName
+ *
+ */
+
+function getCanGameFandom() {
+    return 'canGameFandom';
+}
+function getCanGameUser(fandomName) {
+    return 'canGameUser:' + fandomName;
+
+}
+function getFieldFandomName() {
+    return 'fandomName';
+}
+function getFieldGamingNow() {
+    return 'GAMING_NOW';
+}
+function getFieldUserNumber() {
+    return 'userNumber';
+}
+
+function getUserGameInfo(userId, i) {
+    return 'userGameInfo:' + userId + ':' + i;
+}
+
+function getFieldGameBalloon() {
+    return 'gameBalloon';
+}
+
+function getFieldUserLevel() {
+    return 'level';
+}
+function getFieldCompetitorInfo() {
+    return 'competitorInfo';
+}
+function getFieldCompetitorGameInfos() {
+    return 'competitorGameInfos';
+}
+
+function getFieldCompetitorGameCountInfo() {
+    return 'competitorGameCountInfo';
+}
+function getUserID() {
+    return 'userID';
+}
+router.post('/gameStart', function (req, res) {
+
+    consoleInputLog(req.body);
+    var userFandomName = req.body.fandomName;
+
+    if (!userFandomName) {
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+    var multi = redisClient.multi();
+
+    multi.select(0)
+        .zrange(getCanGameFandom(), 0, -1, 'withscores')
+        .exec(function (err, reply) {
+
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                return;
+            }
+            var fandomUserNumbers = reply[1];
+            var fandomExistingUserList = [];
+
+            for (var i = 0; i < fandomUserNumbers.length; i = i + 2) {
+                var fandomName = fandomUserNumbers[i];
+                var userNumber = fandomUserNumbers[i + 1];
+                if (userNumber != 0 && userFandomName != fandomName && fandomName != getFieldGamingNow()) {
+                    var fandomInfo = {};
+                    fandomInfo[getFieldFandomName()] = fandomName;
+                    fandomInfo[getFieldUserNumber()] = userNumber;
+                    fandomExistingUserList.push(fandomInfo);
+                }
+            }
+
+            if (fandomExistingUserList.length == 0) {
+                var multi = redisClient.multi();
+                multi.select(0)
+                    .srandmember(getUserID())
+                    .exec(function (err, reply) {
+                        console.log(reply);
+                        var randomUserId = reply[1];
+
+                        var multi = redisClient.multi();
+                        multi.select(0)
+                            .hgetall(getUserInfo(randomUserId));
+                        for (var i = 0; i < GAME_BOARD; i++)
+                            multi.hgetall(getUserGameInfo(randomUserId, i));
+
+                        multi.exec(function (err, reply) {
+
+                            var randomCompetitorInfo = reply[1];
+                            var multi = redisClient.multi();
+                            multi.select(1);
+
+                            for (var i = 0; i < GAME_BOARD; i++)
+                                multi.hgetall(getUserGameInfo(randomUserId, i));
+
+                            for (var j = 0; j < GAME_BOARD; j++)
+                                multi.hget(getUserGameInfo(randomUserId, j), getFieldGameBalloon());
+
+                            multi.hget(getHasStarByLevel(), randomCompetitorInfo['level'])
+
+                            multi.exec(function (err, replies) {
+
+                                if (err) {
+                                    sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                                    return;
+                                }
+
+                                var competitorGameInfos = [];
+                                var competitorTotalBalloon = 0;
+
+                                for (var i = 1; i < replies.length - 1; i++) {
+                                    if (i <= GAME_BOARD)
+                                        competitorGameInfos.push(replies[i]);
+                                    else
+                                        competitorTotalBalloon += parseInt(replies[i]);
+                                }
+
+                                var competitorHasStarNumber = parseInt(replies[replies.length - 1]);
+                                var competitorGameCountInfo = {
+                                    'totalBalloon': competitorTotalBalloon,
+                                    'bigStar': parseInt(competitorHasStarNumber / 10),
+                                    'smallStar': competitorHasStarNumber % 10
+                                };
+
+                                var result = {};
+                                result[getFieldCompetitorInfo()] = randomCompetitorInfo;
+                                result[getFieldCompetitorGameInfos()] = competitorGameInfos;
+                                result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
+
+                                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, result);
+                                return;
+                            });
+                        });
+                    });
+            } else {
+                var randomIndex = makeRandom(0, fandomExistingUserList.length - 1);
+                var competitorFandomInfos = fandomExistingUserList[randomIndex];
+                var competitorFandomName = competitorFandomInfos[getFieldFandomName()];
+
+                var multi = redisClient.multi();
+                multi.select(0)
+                    .srandmember(getCanGameUser(competitorFandomName))
+                    .exec(function (err, reply) {
+
+                        if (err) {
+                            sendErrorMessage(res, ERROR_SERVER);
+                            consoleErrorMessage(ERROR_SERVER);
+                            return;
+                        }
+
+                        var competitorId = reply[1];
+                        var multi = redisClient.multi();
+                        multi.select(0)
+                            .hgetall(getUserInfo(competitorId))
+                            .exec(function (err, reply) {
+
+                                if (err) {
+                                    sendErrorMessage(res, ERROR_SERVER);
+                                    consoleErrorMessage(ERROR_SERVER);
+                                    return;
+                                }
+
+                                var competitorInfo = reply[1];
+                                var multi = redisClient.multi();
+                                multi.select(1);
+
+                                for (var i = 0; i < GAME_BOARD; i++)
+                                    multi.hgetall(getUserGameInfo(competitorId, i));
+
+                                for (var j = 0; j < GAME_BOARD; j++)
+                                    multi.hget(getUserGameInfo(competitorId, j), getFieldGameBalloon());
+
+                                multi.hget(getHasStarByLevel(), competitorInfo['level'])
+
+                                multi.exec(function (err, replies) {
+
+                                    if (err) {
+                                        sendErrorMessage(res, ERROR_SERVER);
+                                        consoleErrorMessage(ERROR_SERVER);
+                                        return;
+                                    }
+
+                                    var competitorGameInfos = [];
+                                    var competitorTotalBalloon = 0;
+
+                                    for (var i = 1; i < replies.length - 1; i++) {
+                                        if (i <= GAME_BOARD)
+                                            competitorGameInfos.push(replies[i]);
+                                        else
+                                            competitorTotalBalloon += parseInt(replies[i]);
+                                    }
+
+                                    var competitorHasStarNumber = parseInt(replies[replies.length - 1]);
+                                    var competitorGameCountInfo = {
+                                        'totalBalloon': competitorTotalBalloon,
+                                        'bigStar': parseInt(competitorHasStarNumber / 10),
+                                        'smallStar': competitorHasStarNumber % 10
+                                    };
+
+                                    var result = {};
+                                    result[getFieldCompetitorInfo()] = competitorInfo;
+                                    result[getFieldCompetitorGameInfos()] = competitorGameInfos;
+                                    result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
+
+                                    var multi = redisClient.multi();
+                                    multi.select(0)
+                                        .zincrby(getCanGameFandom(), -1, competitorFandomName)
+                                        .zincrby(getCanGameFandom(), 1, getFieldGamingNow())
+                                        .srem(getCanGameUser(competitorFandomName), competitorId)
+                                        .sadd(getCanGameUser(getFieldGamingNow()), competitorId)
+                                        .exec(function (err) {
+                                            if (err) {
+                                                sendErrorMessage(res, ERROR_SERVER);
+                                                consoleErrorMessage(ERROR_SERVER);
+                                                return;
+                                            }
+
+                                            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, result);
+
+                                        });
+                                });
+                            });
+                    });
+            }
+        });
+});
+
 
 /**
  *
  * 게임 끝난 후 요청
  *
  * @userId
+ * @userFandomName
  * @userGetStarCount
  * @userGetCoinCount
  * @userGetBalloonCount
@@ -268,10 +532,12 @@ router.post('/userHaveStarNumber', function (req, res) {
  *
  */
 
+
 router.post('/gameOver', function (req, res) {
     consoleInputLog(req.body);
 
     var userId = req.body.userID;
+    var userFandomName = req.body.userFandomName;
     var userGetStarCount = req.body.userGetStarCount;
     var userGetCoinCount = req.body.userGetCoinCount;
     var userGetBalloonCount = req.body.userGetBalloonCount;
@@ -279,29 +545,29 @@ router.post('/gameOver', function (req, res) {
     var competitorGameInfo = req.body.competitorGameInfo;
 
     if (!userId || !userGetStarCount || !userGetCoinCount
-        || !userGetBalloonCount || !competitorId || !competitorGameInfo) {
-        consoleErrorMessage(ERROR_WRONG_INPUT);
-        sendErrorMessage(res, ERROR_WRONG_INPUT);
+        || !userGetBalloonCount || !competitorId || !competitorGameInfo || !userFandomName) {
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
     var multi = redisClient.multi();
     multi.select(0)
         .hincrby(getUserInfo(userId), getFieldStarCount(), userGetStarCount)
+        .zincrby(getFandomRank(), userGetStarCount, userFandomName)
         .hincrby(getUserInfo(userId), getFieldBalloonCount(), userGetBalloonCount)
         .hincrby(getUserInfo(userId), getFieldCoinCount(), userGetCoinCount);
+
     for (var i = 0; i < GAME_BOARD; i++)
         multi.hmset(getUserGameInfo(competitorId, i), competitorGameInfo[i]);
 
     multi.exec(function (err) {
         if (err) {
-            sendErrorMessage(res, ERROR_SERVER);
-            consoleErrorMessage(ERROR_SERVER);
+            sendMessage.sendErrorMessage(res, ERROR_SERVER);
             return;
         }
 
-        sendSucceedMessage(res, SUCCEED_REQUEST);
-        consoleSucceedMessage(SUCCEED_REQUEST);
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+
     });
 });
 
@@ -309,7 +575,7 @@ router.post('/gameOver', function (req, res) {
  *
  * 방어모드 셋팅
  * @userId
- * @competitorGameInfo
+ * @userGameInfo
  *
  */
 
@@ -320,8 +586,7 @@ router.post('/settingDefenseMode', function (req, res) {
     var userGameInfo = req.body.userGameInfo;
 
     if (!userId || !userGameInfo) {
-        consoleErrorMessage(ERROR_WRONG_INPUT);
-        sendErrorMessage(res, ERROR_WRONG_INPUT);
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
@@ -332,16 +597,19 @@ router.post('/settingDefenseMode', function (req, res) {
 
     multi.exec(function (err) {
         if (err) {
-            sendErrorMessage(res, ERROR_SERVER);
-            consoleErrorMessage(ERROR_SERVER);
+            sendMessage.sendErrorMessage(res, ERROR_SERVER);
+            console.log(err);
             return;
         }
 
-        sendSucceedMessage(res, SUCCEED_REQUEST);
-        consoleSucceedMessage(SUCCEED_REQUEST);
-    });
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
 
+    });
 });
 
+
+function getFieldFandomUserNumber() {
+    return 'fandomUserNumber';
+}
 
 module.exports = router;
