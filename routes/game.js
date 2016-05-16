@@ -84,7 +84,7 @@ function getHasStarByLevel() {
     return 'hasStarByLevel';
 }
 
-function getLevel() {
+function getFieldLevel() {
     return 'level';
 }
 
@@ -129,9 +129,6 @@ function getFieldGameBalloon() {
     return 'gameBalloon';
 }
 
-function getFieldUserLevel() {
-    return 'level';
-}
 function getFieldCompetitorInfo() {
     return 'competitorInfo';
 }
@@ -279,7 +276,7 @@ router.post('/userHaveStarNumber', function (req, res) {
 
     var multi = redisClient.multi();
     multi.select(0)
-        .hget(getUserInfo(id), getLevel())
+        .hget(getUserInfo(id), getFieldLevel())
         .exec(function (err, rep) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -388,7 +385,7 @@ router.post('/gameStart', function (req, res) {
                                 for (var j = 0; j < GAME_BOARD; j++)
                                     multi.hget(getUserGameInfo(competitorId, j), getFieldGameBalloon());
 
-                                multi.hget(getHasStarByLevel(), competitorInfo[getFieldUserLevel()]);
+                                multi.hget(getHasStarByLevel(), competitorInfo[getFieldLevel()]);
 
                                 multi.exec(function (err, replies) {
 
