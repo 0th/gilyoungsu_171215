@@ -422,7 +422,7 @@ router.get('/initFandomRank', function (req, res) {
 });
 
 /**
- * 
+ *
  * 공지사항 초기화
  *
  */
@@ -665,33 +665,56 @@ router.post('/login', function (req, res) {
     var multi = redisClient.multi();
     multi.select(0)
         .exists(getUserInfo(id))
-        .hget(getUserInfo(id), getFieldFandomName())
         .exec(function (err, rep) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
             var isExisting = rep[1];
-            var fandomName = rep[2];
-
             if (!isExisting) {
                 sendMessage.sendErrorMessage(res, ERROR_LOGIN_FAIL);
                 return;
             }
-            var multi = redisClient.multi();
-            multi.select(0)
-                .sadd(getLogining(), id)
-                .zincrby(getCanGameFandom(), -1, fandomName)
-                .zincrby(getCanGameFandom(), 1, getFieldCANT_GAME())
-                .srem(getCanGameUser(fandomName), id)
-                .sadd(getCanGameUser(getFieldCANT_GAME()), id)
-                .exec(function (err) {
-                    if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                        return;
-                    }
-                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-                });
+
+            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+        });
+
+});
+
+
+/**
+ *
+ * 로그인 성공
+ *  @id
+ *  @fandomName
+ *
+ */
+
+
+router.post('/loginSucceed', function (req, res) {
+
+    consoleInputLog(req.body);
+    var id = req.body.id;
+    var fandomName = req.body.fandomName;
+    if (!id || !fandomName) {
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+    var multi = redisClient.multi();
+    multi.select(0)
+        .sadd(getLogining(), id)
+        .zincrby(getCanGameFandom(), -1, fandomName)
+        .zincrby(getCanGameFandom(), 1, getFieldCANT_GAME())
+        .srem(getCanGameUser(fandomName), id)
+        .sadd(getCanGameUser(getFieldCANT_GAME()), id)
+        .exec(function (err) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
+            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
         });
 });
 
@@ -740,10 +763,10 @@ router.get('/fandomBaseInfo', function (req, res) {
     multi.select(0)
         .zrevrange(getFandomRank(), 0, -1, 'withscores')
         .exec(function (err, rep) {
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                return;
-            }
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
             var fandomRankList = rep[1];
 
             var multi = redisClient.multi();
@@ -759,7 +782,7 @@ router.get('/fandomBaseInfo', function (req, res) {
                     multi.zscore(getFandomUserNumber(), fandomRankList[i])
                         .zrevrange(getFandomBalloonRank(fandomRankList[i]), 0, 0);
                 }
-            }
+                }
 
             multi.exec(function (err, rep) {
 
@@ -907,10 +930,10 @@ router.post('/allUserRankInFandom', function (req, res) {
         .zrevrange(getUserRank(fandomName), 0, -1, 'withscores')
 
         .exec(function (err, reply) {
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                return;
-            }
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
 
             var allUserRankInFandoms = reply[1];
             var allUserRankInFandom = [];
@@ -928,7 +951,7 @@ router.post('/allUserRankInFandom', function (req, res) {
                 allUserRankInFandom.push(eachRank);
 
                 multi.hget(getUserInfo(id), getFieldSelectedBalloonColor());
-            }
+                }
 
 
             multi.exec(function (err, reply) {
@@ -1031,8 +1054,8 @@ router.post('/main', function (req, res) {
 
     if (!id) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
-        return;
-    }
+            return;
+        }
 
     var multi = redisClient.multi();
     multi.select(1);
@@ -1041,10 +1064,10 @@ router.post('/main', function (req, res) {
         multi.hgetall(getUserGameInfo(id, i));
 
     multi.exec(function (err, reply) {
-        if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-            return;
-        }
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
 
         var userGameInfos = reply;
         var userGameInfo = [];
@@ -1080,8 +1103,8 @@ router.post('/purchaseSlogan', function (req, res) {
         .exec(function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                return;
-            }
+                    return;
+                }
             sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
         });
 });

@@ -348,6 +348,7 @@ router.post('/gameStart', function (req, res) {
                     fandomExistingUserList.push(fandomInfo);
                 }
             }
+
             console.log(fandomExistingUserList.length);
             if (fandomExistingUserList.length == 0) {
                 sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
