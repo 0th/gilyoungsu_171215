@@ -107,10 +107,11 @@ function getFieldStarType() {
 function getCanGameFandom() {
     return 'canGameFandom';
 }
+
 function getCanGameUser(fandomName) {
     return 'canGameUser:' + fandomName;
-
 }
+
 function getFieldFandomName() {
     return 'fandomName';
 }
@@ -140,6 +141,9 @@ function getFieldCompetitorGameCountInfo() {
     return 'competitorGameCountInfo';
 }
 
+function getLogining() {
+    return 'logining';
+}
 /**
  *
  * 게임에 필요한 기본 정보 db 초기화
@@ -348,7 +352,7 @@ router.post('/gameStart', function (req, res) {
             if (fandomExistingUserList.length == 0) {
                 sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
                 return;
-                
+
             } else {
 
                 var randomIndex = makeRandom(0, fandomExistingUserList.length - 1);
@@ -439,7 +443,6 @@ router.post('/gameStart', function (req, res) {
         });
 });
 
-
 /**
  *
  * 게임 끝난 후 요청
@@ -454,9 +457,7 @@ router.post('/gameStart', function (req, res) {
  * @competitorGameInfo
  *
  */
-function getLogining() {
-    return 'logining';
-}
+
 
 router.post('/gameOver', function (req, res) {
     consoleInputLog(req.body);
