@@ -348,11 +348,10 @@ router.post('/gameStart', function (req, res) {
                     fandomExistingUserList.push(fandomInfo);
                 }
             }
-
+            console.log(fandomExistingUserList.length);
             if (fandomExistingUserList.length == 0) {
                 sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
                 return;
-
             } else {
 
                 var randomIndex = makeRandom(0, fandomExistingUserList.length - 1);
@@ -493,7 +492,7 @@ router.post('/gameOver', function (req, res) {
 
             var multi = redisClient.multi();
             multi.select(1);
-            for (var i = 0; i < splitedGameInfo.length; i++)
+            for (var i = 0; i < GAME_BOARD; i++)
                 multi.hmset(getUserGameInfo(competitorId, i), getFieldGameBalloon(), splitedGameInfo[i * 2], getFieldStarType(), splitedGameInfo[i * 2 + 1]);
 
             multi.exec(function (err) {
@@ -558,10 +557,11 @@ router.post('/settingDefenseMode', function (req, res) {
 
     var splitedGameInfo = userGameInfo.split(",");
 
+    console.log(splitedGameInfo.length);
     var multi = redisClient.multi();
     multi.select(1);
-    for (var i = 0; i < splitedGameInfo.length; i++)
-        multi.hmset(getUserGameInfo(userId, i), getFieldGameBalloon(), splitedGameInfo[i * 2], getFieldStarType(), splitedGameInfo[i * 2 + 1]);
+    for (var i = 0; i < GAME_BOARD; i++)
+        multi.hmset(getUserGameInfo(userId, i), 'gameBalloon', splitedGameInfo[i * 2], 'starType', splitedGameInfo[i * 2 + 1]);
 
     multi.exec(function (err) {
         if (err) {

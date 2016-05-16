@@ -11,14 +11,6 @@ var sloganColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nT
 var noticeSheet = new GoogleSpreadSheet('1fSC13hjAqYxjr9mFDoDSf7ZvkpOl2dUiOid7bqf2Ft4');
 var logger = require('../functions/logger');
 
-/**
- *
- * TODO
- * 슬로건 없으면 공지사항 띄어주기
- * 게임끝나면 게임정보도 업데이트하기 (랜덤체크하고) o
- *
- */
-
 const GAME_BOARD = 36;
 
 const ERROR_SHEET = 101;
@@ -50,12 +42,6 @@ message[ERROR_DATA_NOT_EXIST] = "DB 데이터가 존재하지 않습니다";
 message[ERROR_LOGIN_FAIL] = "회원가입이 되어있지 않습니다";
 message[ERROR_SLOGAN_NOT_PURCAHSE] = "슬로건을 구입하지 않은 사용자입니다";
 
-
-/**
- *
- * DB0 - User / Fandom / Shop
- *
- */
 
 function addMethod(object, functionName, func) {
     var overloadingFunction = object[functionName];
@@ -436,7 +422,7 @@ router.get('/initFandomRank', function (req, res) {
 });
 
 /**
- * TODO
+ * 
  * 공지사항 초기화
  *
  */
