@@ -495,6 +495,7 @@ router.post('/gameOver', function (req, res) {
             multi.select(1);
             for (var i = 0; i < splitedGameInfo.length; i++)
                 multi.hmset(getUserGameInfo(competitorId, i), getFieldGameBalloon(), splitedGameInfo[i * 2], getFieldStarType(), splitedGameInfo[i * 2 + 1]);
+
             multi.exec(function (err) {
                 if (err) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -559,9 +560,9 @@ router.post('/settingDefenseMode', function (req, res) {
 
     var multi = redisClient.multi();
     multi.select(1);
-    for (var i = 0; i < splitedGameInfo.length; i++) {
+    for (var i = 0; i < splitedGameInfo.length; i++)
         multi.hmset(getUserGameInfo(userId, i), getFieldGameBalloon(), splitedGameInfo[i * 2], getFieldStarType(), splitedGameInfo[i * 2 + 1]);
-    }
+
     multi.exec(function (err) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
