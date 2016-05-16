@@ -346,8 +346,9 @@ router.post('/gameStart', function (req, res) {
             }
 
             if (fandomExistingUserList.length == 0) {
-                sendMessage.sendErrorMessage(res, ERROR_NO_MATCH, err);
+                sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
                 return;
+                
             } else {
 
                 var randomIndex = makeRandom(0, fandomExistingUserList.length - 1);
@@ -385,7 +386,7 @@ router.post('/gameStart', function (req, res) {
                                 for (var j = 0; j < GAME_BOARD; j++)
                                     multi.hget(getUserGameInfo(competitorId, j), getFieldGameBalloon());
 
-                                multi.hget(getHasStarByLevel(), competitorInfo[getFieldLevel()]);
+                                multi.hget(getHasStarByLevel(), competitorInfo['level']);
 
                                 multi.exec(function (err, replies) {
 
