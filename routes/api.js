@@ -8,9 +8,16 @@ var fandomListSheet = new GoogleSpreadSheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjB
 var balloonColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
 var balloonShopListSheet = new GoogleSpreadSheet('1eu3ufiAguhojmI0dSkSG0bySoNdwNezzbrxJawsE7ho');
 var sloganColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
-
+var noticeSheet = new GoogleSpreadSheet('1fSC13hjAqYxjr9mFDoDSf7ZvkpOl2dUiOid7bqf2Ft4');
 var logger = require('../functions/logger');
 
+/**
+ *
+ * TODO
+ * 슬로건 없으면 공지사항 띄어주기
+ * 게임끝나면 게임정보도 업데이트하기 (랜덤체크하고) o
+ *
+ */
 
 const GAME_BOARD = 36;
 
@@ -27,39 +34,28 @@ const ERROR_INIT_GAME_INFO_FAIL = 409;
 const ERROR_LOGIN_FAIL = 401;
 const ERROR_DATA_NOT_EXIST = 402;
 const ERROR_SLOGAN_NOT_PURCAHSE = 808;
-const SUCCEED_JOIN = 700;
-const SUCCEED_JOIN_FANDOM = 707;
-const SUCCEED_LOGIN = 708;
 const SUCCEED_INIT_DB = 701;
-const SUCCEED_FANDOM_USER_NUMBER_RANK_REQUEST = 702;
 const SUCCEED_RESPONSE = 1;
 
 var message = {};
 message[ERROR_SHEET] = "구글 스프레드시트 오류";
-message[SUCCEED_INIT_DB] = "DB 초기화 성공";
 message[ERROR_SERVER] = "서버연결 실패";
-message[SUCCEED_JOIN] = "회원가입 성공";
 message[ERROR_ID_REPEATED] = "아이디 중복으로 회원가입 실패";
 message[ERROR_INIT_GAME_INFO_FAIL] = "회원가입시 게임정보 초기화 실패";
 message[ERROR_WRONG_INPUT] = "입력값 오류";
-message[SUCCEED_FANDOM_USER_NUMBER_RANK_REQUEST] = "팬덤 회원수 정렬 리스트 제공 성공";
 message[ERROR_FANDOM_USER_RANK] = "팬덤 회원수 정렬 리스트 제공 실패";
 message[ERROR_FANDOM_RANK_LOAD] = "팬덤 랭킹 로드 실패";
 message[ERROR_LEVEL_RATIO_LOAD] = "랭킹 비율 로드 실패";
-message[SUCCEED_JOIN_FANDOM] = "팬덤가입 성공";
 message[ERROR_DATA_NOT_EXIST] = "DB 데이터가 존재하지 않습니다";
 message[ERROR_LOGIN_FAIL] = "회원가입이 되어있지 않습니다";
-message[SUCCEED_LOGIN] = "로그인 성공";
-message[SUCCEED_RESPONSE] = "요청 응답 성공";
 message[ERROR_SLOGAN_NOT_PURCAHSE] = "슬로건을 구입하지 않은 사용자입니다";
+
 
 /**
  *
  * DB0 - User / Fandom / Shop
  *
  */
-
-
 
 function addMethod(object, functionName, func) {
     var overloadingFunction = object[functionName];
@@ -80,6 +76,11 @@ function SendMessage() {
     addMethod(this, "sendSucceedMessage", function (res, succeedCode, sendData) {
         res.send({succeedCode: succeedCode, data: sendData});
         console.log({succeedCode: succeedCode, data: sendData})
+    });
+
+    addMethod(this, "sendErrorMessage", function (res, errorCode, err) {
+        res.send({errorCode: errorCode, errorMessage: message[errorCode]});
+        console.log({errorCode: errorCode, errorMessage: message[errorCode], error: err});
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode) {
@@ -177,11 +178,6 @@ function getFieldSelectedBalloonColor() {
     return 'selectedBalloonColor';
 }
 
-function getFieldUserLevel() {
-    return 'level';
-}
-
-
 function getFieldGamingNow() {
     return 'GAMING_NOW';
 }
@@ -205,6 +201,14 @@ function getCanGameFandom() {
     return 'canGameFandom';
 }
 
+function getFieldCANT_GAME() {
+    return 'CANT_GAME';
+}
+
+function getLogining() {
+    return 'logining';
+}
+
 
 /**
  *
@@ -219,7 +223,7 @@ router.get('/initFandomUserNumber', function (req, res) {
     fandomListSheet.getRows(1, function (err, rowData) {
 
         if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SHEET);
+            sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
         }
 
@@ -234,7 +238,7 @@ router.get('/initFandomUserNumber', function (req, res) {
                 .zadd(getCanGameFandom(), 0, rowData[key][keys[5]])
                 .exec(function (err) {
                     if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                         return;
                     }
                 });
@@ -255,7 +259,7 @@ router.get('/initBalloonColorList', function (req, res) {
     balloonColorListSheet.getRows(1, function (err, rowData) {
 
         if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SHEET);
+            sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
         }
 
@@ -268,7 +272,7 @@ router.get('/initBalloonColorList', function (req, res) {
                 .sadd(getBalloonColor(), rowData[key][keys[3]])
                 .exec(function (err) {
                     if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                         return;
                     }
                 });
@@ -291,7 +295,7 @@ router.get('/initSloganColorList', function (req, res) {
     sloganColorListSheet.getRows(1, function (err, rowData) {
 
         if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SHEET);
+            sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
         }
 
@@ -304,7 +308,7 @@ router.get('/initSloganColorList', function (req, res) {
                 .sadd(getSloganColor(), rowData[key][keys[3]])
                 .exec(function (err) {
                     if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                         return;
                     }
                 });
@@ -326,7 +330,7 @@ router.get('/initShopBalloon', function (req, res) {
     balloonShopListSheet.getRows(1, function (err, rowData) {
 
         if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SHEET);
+            sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
         }
 
@@ -339,7 +343,7 @@ router.get('/initShopBalloon', function (req, res) {
                 .hset(getShopBalloon(), rowData[key][keys[3]], rowData[key][keys[4]])
                 .exec(function (err) {
                     if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                         return;
                     }
                 });
@@ -356,7 +360,6 @@ router.get('/initShopBalloon', function (req, res) {
  *
  */
 
-
 router.get('/initFandomBalloonRank', function (req, res) {
 
     var multi = redisClient.multi();
@@ -366,7 +369,7 @@ router.get('/initFandomBalloonRank', function (req, res) {
         .exec(function (err, replies) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -384,7 +387,7 @@ router.get('/initFandomBalloonRank', function (req, res) {
 
             multi.exec(function (err) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                     return;
                 }
                 sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
@@ -408,7 +411,7 @@ router.get('/initFandomRank', function (req, res) {
         .exec(function (err, reply) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -423,7 +426,7 @@ router.get('/initFandomRank', function (req, res) {
 
             multi.exec(function (err) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                     return;
                 }
             });
@@ -432,6 +435,42 @@ router.get('/initFandomRank', function (req, res) {
         });
 });
 
+/**
+ * TODO
+ * 공지사항 초기화
+ *
+ */
+function getNotice() {
+    return 'notice';
+}
+router.get('/initNotice', function (req, res) {
+
+    noticeSheet.getRows(1, function (err, rowData) {
+
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
+            return;
+        }
+
+        var rowKeys = Object.keys(rowData);
+        rowKeys.forEach(function (key) {
+            var keys = Object.keys(rowData[key]);
+
+            var multi = redisClient.multi();
+            multi.select(0)
+                .sadd(getNotice(), rowData[key][keys[3]])
+                .exec(function (err) {
+                    if (err) {
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                        return;
+                    }
+                });
+        });
+
+        sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+    });
+
+});
 /*--------------------------------- 초기화 ---------------------------------*/
 
 
@@ -439,6 +478,9 @@ router.get('/initFandomRank', function (req, res) {
  *
  * 회원가입
  * @id : 사용자 아이디
+ *
+ * TODO
+ * 추후 이 아이디는 사용자 고유의 key값이 될 것
  *
  */
 
@@ -472,7 +514,7 @@ router.post('/join', function (req, res) {
         .exec(function (err, reply) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -485,7 +527,7 @@ router.post('/join', function (req, res) {
                     .sadd(getUserBalloonList(id), user.selectedBalloonShape)
                     .exec(function (err) {
                         if (err) {
-                            sendMessage.sendErrorMessage(res, ERROR_JOIN_FAIL);
+                            sendMessage.sendErrorMessage(res, ERROR_JOIN_FAIL, err);
                             return;
                         }
                         var multi = redisClient.multi();
@@ -497,10 +539,10 @@ router.post('/join', function (req, res) {
 
                         multi.exec(function (err) {
                             if (err) {
-                                sendMessage.sendErrorMessage(res, ERROR_INIT_GAME_INFO_FAIL);
+                                sendMessage.sendErrorMessage(res, ERROR_INIT_GAME_INFO_FAIL, err);
                                 return;
                             }
-                            sendMessage.sendSucceedMessage(res, SUCCEED_JOIN);
+                            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
                         });
                     });
             }
@@ -523,7 +565,7 @@ router.get('/fandomUserNumberRank', function (req, res) {
         .zrevrange(getFandomUserNumber(), 0, -1, 'withscores')
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
             var fandomList = reply[1];
@@ -533,7 +575,7 @@ router.get('/fandomUserNumberRank', function (req, res) {
                 fandomUserNumberRank[fandomList[i]] = fandomList[i + 1];
             }
 
-            sendMessage.sendSucceedMessage(res, SUCCEED_FANDOM_USER_NUMBER_RANK_REQUEST, fandomUserNumberRank);
+            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, fandomUserNumberRank);
         });
 });
 
@@ -570,7 +612,7 @@ router.post('/joinFandom', function (req, res) {
         .exec(function (err, replies) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_FANDOM_RANK_LOAD);
+                sendMessage.sendErrorMessage(res, ERROR_FANDOM_RANK_LOAD, err);
                 return;
             }
 
@@ -584,7 +626,7 @@ router.post('/joinFandom', function (req, res) {
                 .exec(function (err, reply) {
 
                     if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_LEVEL_RATIO_LOAD);
+                        sendMessage.sendErrorMessage(res, ERROR_LEVEL_RATIO_LOAD, err);
                         return;
                     }
 
@@ -608,11 +650,11 @@ router.post('/joinFandom', function (req, res) {
                         .exec(function (err) {
 
                             if (err) {
-                                sendMessage.sendErrorMessage(res, ERROR_JOIN_FANDOM_FAIL);
+                                sendMessage.sendErrorMessage(res, ERROR_JOIN_FANDOM_FAIL, err);
                                 return;
                             }
 
-                            sendMessage.sendSucceedMessage(res, SUCCEED_JOIN_FANDOM);
+                            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
                         });
                 });
         });
@@ -637,26 +679,39 @@ router.post('/login', function (req, res) {
     var multi = redisClient.multi();
     multi.select(0)
         .exists(getUserInfo(id))
+        .hget(getUserInfo(id), getFieldFandomName())
         .exec(function (err, rep) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
             var isExisting = rep[1];
+            var fandomName = rep[2];
 
             if (!isExisting) {
                 sendMessage.sendErrorMessage(res, ERROR_LOGIN_FAIL);
                 return;
             }
-            sendMessage.sendSucceedMessage(res, SUCCEED_LOGIN);
+            var multi = redisClient.multi();
+            multi.select(0)
+                .sadd(getLogining(), id)
+                .zincrby(getCanGameFandom(), -1, fandomName)
+                .zincrby(getCanGameFandom(), 1, getFieldCANT_GAME())
+                .srem(getCanGameUser(fandomName), id)
+                .sadd(getCanGameUser(getFieldCANT_GAME()), id)
+                .exec(function (err) {
+                    if (err) {
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                        return;
+                    }
+                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+                });
         });
 });
-
 
 /**
  *
  *  팬덤별 풍선 랭킹 1위 요청
- *
  *  @fandomName
  *
  */
@@ -675,7 +730,7 @@ router.post('/fandomFirstBalloon', function (req, res) {
         .zrevrange(getFandomBalloonRank(fandomName), 0, 0)
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -700,7 +755,7 @@ router.get('/fandomBaseInfo', function (req, res) {
         .zrevrange(getFandomRank(), 0, -1, 'withscores')
         .exec(function (err, rep) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
             var fandomRankList = rep[1];
@@ -723,7 +778,7 @@ router.get('/fandomBaseInfo', function (req, res) {
             multi.exec(function (err, rep) {
 
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                     return;
                 }
 
@@ -756,7 +811,7 @@ router.get('/balloonColorList', function (req, res) {
         .smembers(getBalloonColor())
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -780,7 +835,7 @@ router.get('/sloganColorList', function (req, res) {
         .smembers(getSloganColor())
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -805,7 +860,7 @@ router.get('/shopList', function (req, res) {
         .exec(function (err, rep) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -829,7 +884,7 @@ router.get('/fandomRankList', function (req, res) {
         .exec(function (err, reply) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -867,7 +922,7 @@ router.post('/allUserRankInFandom', function (req, res) {
 
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -892,7 +947,7 @@ router.post('/allUserRankInFandom', function (req, res) {
 
             multi.exec(function (err, reply) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                     return;
                 }
 
@@ -932,7 +987,7 @@ router.post('/userBalloonList', function (req, res) {
         .smembers(getUserBalloonList(id))
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -965,7 +1020,7 @@ router.post('/userInfo', function (req, res) {
         .exec(function (err, reply) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -1001,7 +1056,7 @@ router.post('/main', function (req, res) {
 
     multi.exec(function (err, reply) {
         if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SERVER);
+            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
             return;
         }
 
@@ -1038,7 +1093,7 @@ router.post('/purchaseSlogan', function (req, res) {
         .hset(getUserInfo(id), getFieldHasSlogan(), 1)
         .exec(function (err) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
             sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
@@ -1086,7 +1141,7 @@ router.post('/settingSlogan', function (req, res) {
                     .exec(function (err) {
 
                         if (err) {
-                            sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                             return;
                         }
                         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
@@ -1122,7 +1177,7 @@ router.post('/purchaseBalloon', function (req, res) {
         .exec(function (err) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
             sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
@@ -1159,7 +1214,7 @@ router.post('/settingBalloon', function (req, res) {
         .exec(function (err) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER);
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
@@ -1167,5 +1222,27 @@ router.post('/settingBalloon', function (req, res) {
         });
 });
 
+
+/**
+ *
+ * 슬로건 미구입시 공지사항 요청
+ *
+ */
+
+router.get('/getNotice', function (req, res) {
+    var multi = redisClient.multi();
+    multi.select(0)
+        .srandmember(getNotice())
+        .exec(function (err, reply) {
+
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
+            var notice = reply[1];
+            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, notice);
+        });
+});
 
 module.exports = router;
