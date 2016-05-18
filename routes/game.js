@@ -644,7 +644,7 @@ router.post('/gameStart', function (req, res) {
  * @userId
  * @userFandomName
  * @userGetStarCount
- * @userGetCoinCount
+ * @userCoinCount
  * @userGetBalloonCount
  * @competitorId
  * @competitorGameInfo
@@ -658,12 +658,12 @@ router.post('/gameOver', function (req, res) {
     var userId = req.body.userId;
     var userFandomName = req.body.userFandomName;
     var userGetStarCount = req.body.userGetStarCount;
-    var userGetCoinCount = req.body.userGetCoinCount;
+    var userCoinCount = req.body.userCoinCount;
     var userGetBalloonCount = req.body.userGetBalloonCount;
     var competitorId = req.body.competitorId;
     var competitorGameInfo = req.body.competitorGameInfo;
 
-    if (!userId || !userGetStarCount || !userGetCoinCount
+    if (!userId || !userGetStarCount || !userCoinCount
         || !userGetBalloonCount || !competitorId || !competitorGameInfo || !userFandomName) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
@@ -674,7 +674,7 @@ router.post('/gameOver', function (req, res) {
         .hincrby(getUserInfo(userId), getFieldStarCount(), userGetStarCount)
         .zincrby(getFandomRank(), userGetStarCount, userFandomName)
         .hincrby(getUserInfo(userId), getFieldBalloonCount(), userGetBalloonCount)
-        .hincrby(getUserInfo(userId), getFieldCoinCount(), userGetCoinCount)
+        .hset(getUserInfo(userId), getFieldCoinCount(), userCoinCount)
         .exec(function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -704,7 +704,6 @@ router.post('/gameOver', function (req, res) {
                         }
                         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
                     });
-
             });
         });
 });
