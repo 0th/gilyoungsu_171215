@@ -2,8 +2,18 @@
  * Created by TaerinYoon on 2016. 5. 10..
  */
 
+//head body
+exports.Log = function (redisClient, id, time) {
 
-exports.Log = function (head, body) {
-    //console.log(/* time */head,body);
+    console.log(redisClient, id, head, body, time);
+
+    var multi = redisClient.multi();
+    multi.select(0)
+        .hset('logining', id, time)
+        .expire(logining, id, 60)
+        .exec(function (err, reply) {
+            console.log(reply);
+        });
+    
     //logger.Log("GetCompetitor",competitorFandomName) ->로거쓰는법!
-}
+};

@@ -11,6 +11,7 @@ var sloganColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nT
 var noticeSheet = new GoogleSpreadSheet('1fSC13hjAqYxjr9mFDoDSf7ZvkpOl2dUiOid7bqf2Ft4');
 var logger = require('../functions/logger');
 
+const LOGIN_VALID_TIME = 60;
 const GAME_BOARD = 36;
 
 const ERROR_SHEET = 101;
@@ -183,17 +184,7 @@ function getFieldSelectedSloganColor() {
 function getFieldSelectedBalloonShape() {
     return 'selectedBalloonShape';
 }
-function getCanGameFandom() {
-    return 'canGameFandom';
-}
 
-function getFieldCANT_GAME() {
-    return 'CANT_GAME';
-}
-
-function getLogining() {
-    return 'logining';
-}
 
 
 /**
@@ -221,7 +212,6 @@ router.get('/initFandomUserNumber', function (req, res) {
             var multi = redisClient.multi();
             multi.select(0)
                 .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]])
-                .zadd(getCanGameFandom(), 0, rowData[key][keys[5]])
                 .exec(function (err) {
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -520,7 +510,7 @@ router.post('/join', function (req, res) {
                         multi.select(1);
 
                         for (var i = 0; i < GAME_BOARD; i++) {
-                            multi.hmset(getUserGameInfo(id, i), getFieldGameBalloon(), 0, getFieldStarType(), 0);
+                            multi.hmset(getUserGameInfo(id, i), getFieldGameBalloon(), 1, getFieldStarType(), 0);
                         }
 
                         multi.exec(function (err) {
@@ -577,6 +567,7 @@ router.get('/fandomUserNumberRank', function (req, res) {
 function getCanGameUser(fandomName) {
     return 'canGameUser:' + fandomName;
 }
+
 router.post('/joinFandom', function (req, res) {
 
     consoleInputLog(req.body);
@@ -631,7 +622,6 @@ router.post('/joinFandom', function (req, res) {
                         .zincrby(getFandomBalloonRank(fandomName), 1, selectedBalloonColor)
                         .zadd(getUserRank(fandomName), 0, id)
                         .zincrby(getFandomUserNumber(), 1, fandomName)
-                        .zincrby(getCanGameFandom(), 1, fandomName)
                         .sadd(getCanGameUser(fandomName), id)
                         .exec(function (err) {
 
@@ -681,42 +671,35 @@ router.post('/login', function (req, res) {
 
 });
 
-
 /**
  *
  * 로그인 성공
  *  @id
- *  @fandomName
  *
  */
-
 
 router.post('/loginSucceed', function (req, res) {
 
     consoleInputLog(req.body);
     var id = req.body.id;
-    var fandomName = req.body.fandomName;
-    if (!id || !fandomName) {
+    if (!id) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
     var multi = redisClient.multi();
-    multi.select(0)
-        .sadd(getLogining(), id)
-        .zincrby(getCanGameFandom(), -1, fandomName)
-        .zincrby(getCanGameFandom(), 1, getFieldCANT_GAME())
-        .srem(getCanGameUser(fandomName), id)
-        .sadd(getCanGameUser(getFieldCANT_GAME()), id)
+    multi.select(2)
+        .sadd(id, '/loginSucceed')
+        .expire(id, LOGIN_VALID_TIME)
         .exec(function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
-
             sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
         });
 });
+
 
 /**
  *
@@ -763,10 +746,11 @@ router.get('/fandomBaseInfo', function (req, res) {
     multi.select(0)
         .zrevrange(getFandomRank(), 0, -1, 'withscores')
         .exec(function (err, rep) {
-                if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                    return;
-                }
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
             var fandomRankList = rep[1];
 
             var multi = redisClient.multi();
@@ -782,7 +766,7 @@ router.get('/fandomBaseInfo', function (req, res) {
                     multi.zscore(getFandomUserNumber(), fandomRankList[i])
                         .zrevrange(getFandomBalloonRank(fandomRankList[i]), 0, 0);
                 }
-                }
+            }
 
             multi.exec(function (err, rep) {
 
@@ -802,7 +786,10 @@ router.get('/fandomBaseInfo', function (req, res) {
 
                     fandomBaseInfos.push(fandomBaseData);
                 }
+
+
                 sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, fandomBaseInfos);
+
             });
         });
 });
@@ -880,6 +867,7 @@ router.get('/shopList', function (req, res) {
         });
 });
 
+
 /**
  *
  * 전체 팬덤 점수 랭킹 리스트 요청
@@ -930,10 +918,10 @@ router.post('/allUserRankInFandom', function (req, res) {
         .zrevrange(getUserRank(fandomName), 0, -1, 'withscores')
 
         .exec(function (err, reply) {
-                if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                    return;
-                }
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
 
             var allUserRankInFandoms = reply[1];
             var allUserRankInFandom = [];
@@ -951,7 +939,7 @@ router.post('/allUserRankInFandom', function (req, res) {
                 allUserRankInFandom.push(eachRank);
 
                 multi.hget(getUserInfo(id), getFieldSelectedBalloonColor());
-                }
+            }
 
 
             multi.exec(function (err, reply) {
@@ -1034,8 +1022,19 @@ router.post('/userInfo', function (req, res) {
             }
 
             var userInfo = reply[1];
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, userInfo);
 
+
+            var multi = redisClient.multi();
+            multi.select(2)
+                .sadd(id, '/userInfo')
+                .expire(id, LOGIN_VALID_TIME)
+                .exec(function (err) {
+                    if (err) {
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                        return;
+                    }
+                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, userInfo);
+                });
         });
 });
 
@@ -1054,8 +1053,8 @@ router.post('/main', function (req, res) {
 
     if (!id) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
-            return;
-        }
+        return;
+    }
 
     var multi = redisClient.multi();
     multi.select(1);
@@ -1064,10 +1063,10 @@ router.post('/main', function (req, res) {
         multi.hgetall(getUserGameInfo(id, i));
 
     multi.exec(function (err, reply) {
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                return;
-            }
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            return;
+        }
 
         var userGameInfos = reply;
         var userGameInfo = [];
@@ -1075,8 +1074,18 @@ router.post('/main', function (req, res) {
         for (var i = 1; i <= GAME_BOARD; i++)
             userGameInfo.push(userGameInfos[i]);
 
-        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, userGameInfo);
 
+        var multi = redisClient.multi();
+        multi.select(2)
+            .sadd(id, '/main')
+            .expire(id, LOGIN_VALID_TIME)
+            .exec(function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, userGameInfo);
+            });
     });
 });
 
@@ -1103,9 +1112,20 @@ router.post('/purchaseSlogan', function (req, res) {
         .exec(function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                    return;
-                }
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+                return;
+            }
+
+            var multi = redisClient.multi();
+            multi.select(2)
+                .sadd(id, '/purchaseSlogan')
+                .expire(id, LOGIN_VALID_TIME)
+                .exec(function (err) {
+                    if (err) {
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                        return;
+                    }
+                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+                });
         });
 });
 
@@ -1153,7 +1173,18 @@ router.post('/settingSlogan', function (req, res) {
                             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                             return;
                         }
-                        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+
+                        var multi = redisClient.multi();
+                        multi.select(2)
+                            .sadd(id, '/settingSlogan')
+                            .expire(id, LOGIN_VALID_TIME)
+                            .exec(function (err) {
+                                if (err) {
+                                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                                    return;
+                                }
+                                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+                            });
                     });
             }
         });
@@ -1189,7 +1220,18 @@ router.post('/purchaseBalloon', function (req, res) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+
+            var multi = redisClient.multi();
+            multi.select(2)
+                .sadd(id, '/purchaseBalloon')
+                .expire(id, LOGIN_VALID_TIME)
+                .exec(function (err) {
+                    if (err) {
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                        return;
+                    }
+                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+                });
         });
 });
 
@@ -1227,7 +1269,18 @@ router.post('/settingBalloon', function (req, res) {
                 return;
             }
 
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+
+            var multi = redisClient.multi();
+            multi.select(2)
+                .sadd(id, '/settingBalloon')
+                .expire(id, LOGIN_VALID_TIME)
+                .exec(function (err) {
+                    if (err) {
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                        return;
+                    }
+                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+                });
         });
 });
 
@@ -1253,5 +1306,6 @@ router.get('/getNotice', function (req, res) {
             sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, notice);
         });
 });
+
 
 module.exports = router;
