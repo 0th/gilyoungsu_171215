@@ -735,7 +735,7 @@ router.post('/fandomFirstBalloon', function (req, res) {
 /**
  *
  * 로그인시 팬덤 기본정보 요청
- *
+ * 
  */
 
 router.get('/fandomBaseInfo', function (req, res) {

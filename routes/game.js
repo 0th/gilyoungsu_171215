@@ -702,9 +702,9 @@ router.post('/gameOver', function (req, res) {
                             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                             return;
                         }
-                        sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
+                        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
                     });
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+
             });
         });
 });
