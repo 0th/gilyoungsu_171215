@@ -6,7 +6,6 @@ var GoogleSpreadsheet = require("google-spreadsheet");
 var balloonBlowSpeedSheet = new GoogleSpreadsheet('1GDBrKUfyqo4LAK0BuSyjJ6FETMj3yljxUVyHYCLnPxk');
 var gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
 var hasStarByLevelSheet = new GoogleSpreadsheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
-var _ = require('underscore');
 
 const ERROR_SHEET = 101;
 const ERROR_SERVER = 202;
@@ -15,6 +14,13 @@ const ERROR_NO_MATCH = 405;
 const SUCCEED_RESPONSE = 704;
 const SUCCEED_INIT_DB = 701;
 const GAME_BOARD = 36;
+
+/**
+ *
+ * 로그인 세션 시간 상수화
+ *
+ */
+
 const LOGIN_VALID_TIME = 60;
 const GAME_TIME = 30;
 
@@ -42,7 +48,7 @@ function SendMessage() {
 
     addMethod(this, "sendSucceedMessage", function (res, succeedCode, sendData) {
         res.send({succeedCode: succeedCode, data: sendData});
-        console.log({succeedCode: succeedCode, data: sendData})
+        console.log({succeedCode: succeedCode, data: JSON.stringify(sendData)});
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode, err) {
@@ -185,7 +191,6 @@ router.get('/initBalloonBlowSpeedInfo', function (req, res) {
     });
 });
 
-
 /**
  *
  * 레벨 부여 비율 db 초기화 함수
@@ -306,15 +311,13 @@ router.post('/userHaveStarNumber', function (req, res) {
 
 /**
  *
- * 게임 시작 요청 (랜덤 매칭)
- * @userId
- * @fandomName
- *
+ * 상대 유저 뽑기 함수
+ *  
  */
 
-var searchCompetitorId = function (fandomExistingUserList, callback) {
+var searchCompetitorId = function (fandomExistingUserList, count, callback) {
 
-    var randomIndex = makeRandom(0, fandomExistingUserList.length - 1);
+    var randomIndex = makeRandom(0, fandomExistingUserList.length);
     var competitorFandomInfos = fandomExistingUserList[randomIndex];
     var competitorFandomName = competitorFandomInfos[getFieldFandomName()];
 
@@ -332,29 +335,92 @@ var searchCompetitorId = function (fandomExistingUserList, callback) {
             multi.select(2)
                 .exists(competitorId)
                 .exec(function (err, reply) {
+                    ++count;
                     var isLogining = reply[1];
-                    if (isLogining) {
-                        searchCompetitorId(fandomExistingUserList, callback);
-                    } else {
+                    if (count == 5) {
+                        competitorId = null;
                         callback(competitorId);
                     }
+                    else if (isLogining)
+                        searchCompetitorId(fandomExistingUserList, count, callback);
+                    else if (!isLogining)
+                        callback(competitorId);
+
                 });
         });
 };
 
+/**
+ *
+ * 상대 유저 게임정보 받아오기 함수
+ *
+ */
 
-function addCallback(a, b, callback) {
+var getCompetitorUserInfo = function (competitorId, callback) {
+    var multi = redisClient.multi();
+    multi.select(0)
+        .hgetall(getUserInfo(competitorId))
+        .exec(function (err, reply) {
 
-    var sumvalue = a + b;
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
 
-    callback(sumvalue);
-}
+            var competitorInfo = reply[1];
+            var multi = redisClient.multi();
+            multi.select(1);
 
+            for (var i = 0; i < GAME_BOARD; i++)
+                multi.hgetall(getUserGameInfo(competitorId, i));
 
-addCallback(2, 3, function (sumvalue) {
+            for (var j = 0; j < GAME_BOARD; j++)
+                multi.hget(getUserGameInfo(competitorId, j), getFieldGameBalloon());
 
-})
+            multi.hget(getHasStarByLevel(), competitorInfo['level']);
 
+            multi.exec(function (err, replies) {
+
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+
+                var competitorGameInfos = [];
+                var competitorTotalBalloon = 0;
+
+                for (var i = 1; i < replies.length - 1; i++) {
+                    if (i <= GAME_BOARD)
+                        competitorGameInfos.push(replies[i]);
+                    else
+                        competitorTotalBalloon += parseInt(replies[i]);
+                }
+
+                var competitorHasStarNumber = parseInt(replies[replies.length - 1]);
+                var competitorGameCountInfo = {
+                    'totalBalloon': competitorTotalBalloon,
+                    'bigStar': parseInt(competitorHasStarNumber / 10),
+                    'smallStar': competitorHasStarNumber % 10
+                };
+
+                var result = {};
+                result[getFieldCompetitorInfo()] = competitorInfo;
+                result[getFieldCompetitorGameInfos()] = competitorGameInfos;
+                result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
+
+                callback(result);
+
+            });
+        });
+};
+
+/**
+ *
+ * 게임 시작 요청 (랜덤 매칭)
+ * @userId
+ * @fandomName
+ *
+ */
 
 router.post('/gameStart', function (req, res) {
 
@@ -394,9 +460,8 @@ router.post('/gameStart', function (req, res) {
                 sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
                 return;
             } else {
-                searchCompetitorId(fandomExistingUserList, function (competitorId) {
+                searchCompetitorId(fandomExistingUserList, 0, function (competitorId) {
                     if (competitorId == null) {
-
                         var multi = redisClient.multi();
                         multi.select(2)
                             .sadd(userId, '/gameStart')
@@ -408,234 +473,28 @@ router.post('/gameStart', function (req, res) {
                                 }
                                 sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
                             });
-
+                        return;
                     }
-                    var multi = redisClient.multi();
-                    multi.select(0)
-                        .hgetall(getUserInfo(competitorId))
-                        .exec(function (err, reply) {
 
-                            if (err) {
-                                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                                return;
-                            }
-
-                            var competitorInfo = reply[1];
-                            var multi = redisClient.multi();
-                            multi.select(1);
-
-                            for (var i = 0; i < GAME_BOARD; i++)
-                                multi.hgetall(getUserGameInfo(competitorId, i));
-
-                            for (var j = 0; j < GAME_BOARD; j++)
-                                multi.hget(getUserGameInfo(competitorId, j), getFieldGameBalloon());
-
-                            multi.hget(getHasStarByLevel(), competitorInfo['level']);
-
-                            multi.exec(function (err, replies) {
-
+                    getCompetitorUserInfo(competitorId, function (result) {
+                        var multi = redisClient.multi();
+                        multi.select(2)
+                            .sadd(userId, '/gameStart')
+                            .expire(userId, LOGIN_VALID_TIME)
+                            .sadd(competitorId, '/gaming')
+                            .expire(competitorId, GAME_TIME)
+                            .exec(function (err) {
                                 if (err) {
                                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                                     return;
                                 }
-
-                                var competitorGameInfos = [];
-                                var competitorTotalBalloon = 0;
-
-                                for (var i = 1; i < replies.length - 1; i++) {
-                                    if (i <= GAME_BOARD)
-                                        competitorGameInfos.push(replies[i]);
-                                    else
-                                        competitorTotalBalloon += parseInt(replies[i]);
-                                }
-
-                                var competitorHasStarNumber = parseInt(replies[replies.length - 1]);
-                                var competitorGameCountInfo = {
-                                    'totalBalloon': competitorTotalBalloon,
-                                    'bigStar': parseInt(competitorHasStarNumber / 10),
-                                    'smallStar': competitorHasStarNumber % 10
-                                };
-
-                                var result = {};
-                                result[getFieldCompetitorInfo()] = competitorInfo;
-                                result[getFieldCompetitorGameInfos()] = competitorGameInfos;
-                                result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
-
-                                var multi = redisClient.multi();
-                                multi.select(2)
-                                    .sadd(userId, '/gameStart')
-                                    .expire(userId, LOGIN_VALID_TIME)
-                                    .sadd(competitorId, '/gaming')
-                                    .expire(competitorId, GAME_TIME)
-                                    .exec(function (err) {
-                                        if (err) {
-                                            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                                            return;
-                                        }
-                                        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, result);
-                                    });
+                                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, result);
                             });
-                        });
+                    });
                 });
             }
-
         });
 });
-
-/*
- router.post('/gameStart', function (req, res) {
-
- consoleInputLog(req.body);
- var userFandomName = req.body.fandomName;
- var userId = req.body.userId;
-
- if (!userFandomName) {
- sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
- return;
- }
-
- var multi = redisClient.multi();
- multi.select(0)
- .zrange(getFandomUserNumber(), 0, -1, 'withscores')
- .exec(function (err, reply) {
-
- if (err) {
- sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
- return;
- }
- var fandomUserNumbers = reply[1];
- var fandomExistingUserList = [];
-
- for (var i = 0; i < fandomUserNumbers.length; i = i + 2) {
- var fandomName = fandomUserNumbers[i];
- var userNumber = fandomUserNumbers[i + 1];
- if (userNumber != 0 && userFandomName != fandomName && fandomName != getFieldCANT_GAME()) {
- var fandomInfo = {};
- fandomInfo[getFieldFandomName()] = fandomName;
- fandomInfo[getFieldUserNumber()] = userNumber;
- fandomExistingUserList.push(fandomInfo);
- }
- }
-
- if (fandomExistingUserList.length == 0) {
- sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
- return;
- } else {
-
- var randomIndex = makeRandom(0, fandomExistingUserList.length - 1);
- var competitorFandomInfos = fandomExistingUserList[randomIndex];
- var competitorFandomName = competitorFandomInfos[getFieldFandomName()];
-
- var multi = redisClient.multi();
- multi.select(0)
- .srandmember(getCanGameUser(competitorFandomName))
- .exec(function (err, reply) {
-
- if (err) {
- sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
- return;
- }
-
- var competitorId = reply[1];
- var multi = redisClient.multi();
- multi.select(2)
- .exists(competitorId)
- .exec(function (err, reply) {
-
- if (err) {
- sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
- return;
- }
-
- var isLogined = reply[1];
- if (isLogined == 0) {
- var multi = redisClient.multi();
- multi.select(0)
- .hgetall(getUserInfo(competitorId))
- .exec(function (err, reply) {
-
- if (err) {
- sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
- return;
- }
-
- var competitorInfo = reply[1];
- var multi = redisClient.multi();
- multi.select(1);
-
- for (var i = 0; i < GAME_BOARD; i++)
- multi.hgetall(getUserGameInfo(competitorId, i));
-
- for (var j = 0; j < GAME_BOARD; j++)
- multi.hget(getUserGameInfo(competitorId, j), getFieldGameBalloon());
-
- multi.hget(getHasStarByLevel(), competitorInfo['level']);
-
- multi.exec(function (err, replies) {
-
- if (err) {
- sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
- return;
- }
-
- var competitorGameInfos = [];
- var competitorTotalBalloon = 0;
-
- for (var i = 1; i < replies.length - 1; i++) {
- if (i <= GAME_BOARD)
- competitorGameInfos.push(replies[i]);
- else
- competitorTotalBalloon += parseInt(replies[i]);
- }
-
- var competitorHasStarNumber = parseInt(replies[replies.length - 1]);
- var competitorGameCountInfo = {
- 'totalBalloon': competitorTotalBalloon,
- 'bigStar': parseInt(competitorHasStarNumber / 10),
- 'smallStar': competitorHasStarNumber % 10
- };
-
- var result = {};
- result[getFieldCompetitorInfo()] = competitorInfo;
- result[getFieldCompetitorGameInfos()] = competitorGameInfos;
- result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
-
-
- var multi = redisClient.multi();
- multi.select(2)
- .sadd(userId, '/gameStart')
- .expire(userId, LOGIN_VALID_TIME)
- .sadd(competitorId, '/gaming')
- .expire(competitorId, GAME_TIME)
- .exec(function (err) {
- if (err) {
- sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
- return;
- }
- sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, result);
- });
- });
- });
- } else {
- var multi = redisClient.multi();
- multi.select(2)
- .sadd(userId, '/gameStart')
- .expire(userId, LOGIN_VALID_TIME)
- .exec(function (err) {
- if (err) {
- sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
- return;
- }
- sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
- });
- }
- });
- });
- }
- });
- });
- */
-
 
 /**
  *
@@ -650,7 +509,6 @@ router.post('/gameStart', function (req, res) {
  * @competitorGameInfo
  *
  */
-
 
 router.post('/gameOver', function (req, res) {
 
