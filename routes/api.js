@@ -27,6 +27,7 @@ const ERROR_INIT_GAME_INFO_FAIL = 409;
 const ERROR_LOGIN_FAIL = 401;
 const ERROR_DATA_NOT_EXIST = 402;
 const ERROR_SLOGAN_NOT_PURCAHSE = 808;
+const ERROR_LOGINED = 909;
 const SUCCEED_INIT_DB = 701;
 const SUCCEED_RESPONSE = 1;
 
@@ -42,6 +43,7 @@ message[ERROR_LEVEL_RATIO_LOAD] = "랭킹 비율 로드 실패";
 message[ERROR_DATA_NOT_EXIST] = "DB 데이터가 존재하지 않습니다";
 message[ERROR_LOGIN_FAIL] = "회원가입이 되어있지 않습니다";
 message[ERROR_SLOGAN_NOT_PURCAHSE] = "슬로건을 구입하지 않은 사용자입니다";
+message[ERROR_LOGINED] = "이미 로그인 되어있는 사용자 입니다";
 
 
 function addMethod(object, functionName, func) {
@@ -77,6 +79,38 @@ function SendMessage() {
 }
 
 var sendMessage = new SendMessage();
+
+function SetUserLogining() {
+    addMethod(this, "setUserLogining", function (res, userId, protocol) {
+        var multi = redisClient.multi();
+        multi.select(2)
+            .sadd(userId, protocol)
+            .expire(userId, LOGIN_VALID_TIME)
+            .exec(function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+            });
+    });
+
+    addMethod(this, "setUserLogining", function (res, userId, protocol, sendData) {
+        var multi = redisClient.multi();
+        multi.select(2)
+            .sadd(userId, protocol)
+            .expire(userId, LOGIN_VALID_TIME)
+            .exec(function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, sendData);
+            });
+    });
+}
+
+var setUserLogining = new SetUserLogining();
 
 function consoleInputLog(body) {
     console.log(body);
@@ -184,7 +218,6 @@ function getFieldSelectedSloganColor() {
 function getFieldSelectedBalloonShape() {
     return 'selectedBalloonShape';
 }
-
 
 
 /**
@@ -653,22 +686,36 @@ router.post('/login', function (req, res) {
     }
 
     var multi = redisClient.multi();
-    multi.select(0)
-        .exists(getUserInfo(id))
-        .exec(function (err, rep) {
+    multi.select(2)
+        .exists(id)
+        .exec(function (err, reply) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
-            var isExisting = rep[1];
-            if (!isExisting) {
-                sendMessage.sendErrorMessage(res, ERROR_LOGIN_FAIL);
+
+            var isLogined = reply[1];
+            if (isLogined) {
+                sendMessage.sendErrorMessage(res, ERROR_LOGINED);
                 return;
+            } else {
+                var multi = redisClient.multi();
+                multi.select(0)
+                    .exists(getUserInfo(id))
+                    .exec(function (err, rep) {
+                        if (err) {
+                            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                            return;
+                        }
+                        var isExisting = rep[1];
+                        if (!isExisting) {
+                            sendMessage.sendErrorMessage(res, ERROR_LOGIN_FAIL);
+                            return;
+                        }
+                        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+                    });
             }
-
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
         });
-
 });
 
 /**
@@ -686,18 +733,7 @@ router.post('/loginSucceed', function (req, res) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
-
-    var multi = redisClient.multi();
-    multi.select(2)
-        .sadd(id, '/loginSucceed')
-        .expire(id, LOGIN_VALID_TIME)
-        .exec(function (err) {
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                return;
-            }
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-        });
+    setUserLogining.setUserLogining(res, id, 'loginSucceed');
 });
 
 
@@ -735,7 +771,7 @@ router.post('/fandomFirstBalloon', function (req, res) {
 /**
  *
  * 로그인시 팬덤 기본정보 요청
- * 
+ *
  */
 
 router.get('/fandomBaseInfo', function (req, res) {
@@ -1023,18 +1059,7 @@ router.post('/userInfo', function (req, res) {
 
             var userInfo = reply[1];
 
-
-            var multi = redisClient.multi();
-            multi.select(2)
-                .sadd(id, '/userInfo')
-                .expire(id, LOGIN_VALID_TIME)
-                .exec(function (err) {
-                    if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                        return;
-                    }
-                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, userInfo);
-                });
+            setUserLogining.setUserLogining(res, id, 'userInfo', userInfo);
         });
 });
 
@@ -1074,18 +1099,8 @@ router.post('/main', function (req, res) {
         for (var i = 1; i <= GAME_BOARD; i++)
             userGameInfo.push(userGameInfos[i]);
 
+        setUserLogining.setUserLogining(res, id, 'main', userGameInfo);
 
-        var multi = redisClient.multi();
-        multi.select(2)
-            .sadd(id, '/main')
-            .expire(id, LOGIN_VALID_TIME)
-            .exec(function (err) {
-                if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                    return;
-                }
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, userGameInfo);
-            });
     });
 });
 
@@ -1115,17 +1130,8 @@ router.post('/purchaseSlogan', function (req, res) {
                 return;
             }
 
-            var multi = redisClient.multi();
-            multi.select(2)
-                .sadd(id, '/purchaseSlogan')
-                .expire(id, LOGIN_VALID_TIME)
-                .exec(function (err) {
-                    if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                        return;
-                    }
-                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-                });
+            setUserLogining.setUserLogining(res, id, 'purchaseSlogan');
+
         });
 });
 
@@ -1174,17 +1180,8 @@ router.post('/settingSlogan', function (req, res) {
                             return;
                         }
 
-                        var multi = redisClient.multi();
-                        multi.select(2)
-                            .sadd(id, '/settingSlogan')
-                            .expire(id, LOGIN_VALID_TIME)
-                            .exec(function (err) {
-                                if (err) {
-                                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                                    return;
-                                }
-                                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-                            });
+                        setUserLogining.setUserLogining(res, id, 'settingSlogan');
+
                     });
             }
         });
@@ -1221,17 +1218,8 @@ router.post('/purchaseBalloon', function (req, res) {
                 return;
             }
 
-            var multi = redisClient.multi();
-            multi.select(2)
-                .sadd(id, '/purchaseBalloon')
-                .expire(id, LOGIN_VALID_TIME)
-                .exec(function (err) {
-                    if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                        return;
-                    }
-                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-                });
+            setUserLogining.setUserLogining(res, id, 'purchaseBalloon');
+
         });
 });
 
@@ -1269,18 +1257,8 @@ router.post('/settingBalloon', function (req, res) {
                 return;
             }
 
+            setUserLogining.setUserLogining(res, id, 'settingBalloon');
 
-            var multi = redisClient.multi();
-            multi.select(2)
-                .sadd(id, '/settingBalloon')
-                .expire(id, LOGIN_VALID_TIME)
-                .exec(function (err) {
-                    if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                        return;
-                    }
-                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-                });
         });
 });
 

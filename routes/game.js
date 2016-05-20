@@ -64,6 +64,54 @@ function SendMessage() {
 
 var sendMessage = new SendMessage();
 
+function SetUserLogining() {
+    addMethod(this, "setUserLogining", function (res, userId, protocol) {
+        var multi = redisClient.multi();
+        multi.select(2)
+            .sadd(userId, protocol)
+            .expire(userId, LOGIN_VALID_TIME)
+            .exec(function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+            });
+    });
+
+    addMethod(this, "setUserLoginingNoMatched", function (res, userId, protocol) {
+        var multi = redisClient.multi();
+        multi.select(2)
+            .sadd(userId, protocol)
+            .expire(userId, LOGIN_VALID_TIME)
+            .exec(function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+                sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
+            });
+    });
+
+    addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, competitorGameInfo) {
+        var multi = redisClient.multi();
+        multi.select(2)
+            .sadd(userId, 'gameStart')
+            .expire(userId, LOGIN_VALID_TIME)
+            .sadd(competitorId, 'gaming')
+            .expire(competitorId, GAME_TIME)
+            .exec(function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, competitorGameInfo);
+            });
+    });
+}
+
+var setUserLogining = new SetUserLogining();
+
 function consoleInputLog(body) {
     console.log(body);
 }
@@ -312,7 +360,7 @@ router.post('/userHaveStarNumber', function (req, res) {
 /**
  *
  * 상대 유저 뽑기 함수
- *  
+ *
  */
 
 var searchCompetitorId = function (fandomExistingUserList, count, callback) {
@@ -457,39 +505,17 @@ router.post('/gameStart', function (req, res) {
             }
 
             if (fandomExistingUserList.length == 0) {
-                sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
+                setUserLogining.setUserLoginingNoMatched(res, userId, 'gameStart');
                 return;
             } else {
                 searchCompetitorId(fandomExistingUserList, 0, function (competitorId) {
                     if (competitorId == null) {
-                        var multi = redisClient.multi();
-                        multi.select(2)
-                            .sadd(userId, '/gameStart')
-                            .expire(userId, LOGIN_VALID_TIME)
-                            .exec(function (err) {
-                                if (err) {
-                                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                                    return;
-                                }
-                                sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
-                            });
+                        setUserLogining.setUserLoginingNoMatched(res, userId, 'gameStart');
                         return;
                     }
 
                     getCompetitorUserInfo(competitorId, function (result) {
-                        var multi = redisClient.multi();
-                        multi.select(2)
-                            .sadd(userId, '/gameStart')
-                            .expire(userId, LOGIN_VALID_TIME)
-                            .sadd(competitorId, '/gaming')
-                            .expire(competitorId, GAME_TIME)
-                            .exec(function (err) {
-                                if (err) {
-                                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                                    return;
-                                }
-                                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, result);
-                            });
+                        setUserLogining.setUserLoginingMatched(res, userId, competitorId, result);
                     });
                 });
             }
@@ -551,17 +577,8 @@ router.post('/gameOver', function (req, res) {
                     return;
                 }
 
-                var multi = redisClient.multi();
-                multi.select(2)
-                    .sadd(userId, '/gameOver')
-                    .expire(userId, LOGIN_VALID_TIME)
-                    .exec(function (err) {
-                        if (err) {
-                            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                            return;
-                        }
-                        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-                    });
+                setUserLogining.setUserLogining(res, userId, 'gameOver');
+
             });
         });
 });
@@ -598,17 +615,8 @@ router.post('/settingDefenseMode', function (req, res) {
             return;
         }
 
-        var multi = redisClient.multi();
-        multi.select(2)
-            .sadd(id, '/settingDefenseMode')
-            .expire(id, LOGIN_VALID_TIME)
-            .exec(function (err) {
-                if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                    return;
-                }
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-            });
+        setUserLogining.setUserLogining(res, id, 'settingDefenseMode');
+
     });
 });
 
