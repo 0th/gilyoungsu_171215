@@ -1,6 +1,6 @@
 var express = require('express');
 var redis = require('redis');
-var redisClient = redis.createClient();
+var redisClient = redis.createClient(6379,'192.168.11.4');
 var router = express.Router();
 var GoogleSpreadsheet = require("google-spreadsheet");
 var balloonBlowSpeedSheet = new GoogleSpreadsheet('1GDBrKUfyqo4LAK0BuSyjJ6FETMj3yljxUVyHYCLnPxk');
@@ -39,6 +39,8 @@ function addMethod(object, functionName, func) {
             return overloadingFunction.apply(this, arguments);
     };
 }
+
+
 
 function SendMessage() {
     addMethod(this, "sendSucceedMessage", function (res, succeedCode) {

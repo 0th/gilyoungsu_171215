@@ -1,6 +1,3 @@
-/**
- * Created by TaerinYoon on 2016. 5. 10..
- */
 
 //head body
 exports.Log = function (redisClient, id, time) {
