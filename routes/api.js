@@ -1,13 +1,15 @@
 var express = require('express');
 var redis = require('redis');
-var redisClient = redis.createClient(6379,'192.168.11.4');
+var redisClient = redis.createClient(6379, '192.168.11.4');
 var router = express.Router();
 var _ = require('underscore');
+const fs = require('fs');
+
 var GoogleSpreadSheet = require("google-spreadsheet");
-var fandomListSheet = new GoogleSpreadSheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjBQZuYqH5vQ');
-var balloonColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
-var balloonShopListSheet = new GoogleSpreadSheet('1eu3ufiAguhojmI0dSkSG0bySoNdwNezzbrxJawsE7ho');
-var sloganColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
+var fandomListSheet = new GoogleSpreadSheet('1hYCLWNC4R3a70fAeU0OkejDp6VOjaoiZTEDIyP7GBtI');
+var balloonColorListSheet = new GoogleSpreadSheet('1VfbrYs1UZJK1g-mRTNP6u_dk8w2zpjXxPQq-ocGY9UE');
+var balloonShopListSheet = new GoogleSpreadSheet('1VfbrYs1UZJK1g-mRTNP6u_dk8w2zpjXxPQq-ocGY9UE');
+var sloganColorListSheet = new GoogleSpreadSheet('1VfbrYs1UZJK1g-mRTNP6u_dk8w2zpjXxPQq-ocGY9UE');
 var noticeSheet = new GoogleSpreadSheet('1fSC13hjAqYxjr9mFDoDSf7ZvkpOl2dUiOid7bqf2Ft4');
 var logger = require('../functions/logger');
 
@@ -141,10 +143,10 @@ function getFandomRank() {
 }
 
 function getUserID() {
-    return 'userID';
+    return 'userIdList';
 }
 function getUserInfo(userId) {
-    return 'userInfo:' + userId;
+    return 'user:' + userId + ":info";
 }
 
 function getGameLevelRatio() {
@@ -229,9 +231,7 @@ function getFieldSelectedBalloonShape() {
  */
 
 router.get('/initFandomUserNumber', function (req, res) {
-
     fandomListSheet.getRows(1, function (err, rowData) {
-
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
@@ -240,8 +240,11 @@ router.get('/initFandomUserNumber', function (req, res) {
         var rowKeys = Object.keys(rowData);
 
         rowKeys.forEach(function (key) {
-            var keys = Object.keys(rowData[key]);
+            if (key == 0) {
+                return;
+            }
 
+            var keys = Object.keys(rowData[key]);
             var multi = redisClient.multi();
             multi.select(0)
                 .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]])
@@ -253,7 +256,6 @@ router.get('/initFandomUserNumber', function (req, res) {
                 });
         });
         sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
-
     });
 });
 
@@ -264,9 +266,8 @@ router.get('/initFandomUserNumber', function (req, res) {
  */
 
 router.get('/initBalloonColorList', function (req, res) {
-
-    balloonColorListSheet.getRows(1, function (err, rowData) {
-
+    const balloonColorSheetNum = 2;
+    balloonColorListSheet.getRows(balloonColorSheetNum, function (err, rowData) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
@@ -274,11 +275,15 @@ router.get('/initBalloonColorList', function (req, res) {
 
         var rowKeys = Object.keys(rowData);
         rowKeys.forEach(function (key) {
+            if (key <= 1) {
+                return;
+            }
+
             var keys = Object.keys(rowData[key]);
 
             var multi = redisClient.multi();
             multi.select(0)
-                .sadd(getBalloonColor(), rowData[key][keys[3]])
+                .sadd(getBalloonColor(), rowData[key][keys[4]])
                 .exec(function (err) {
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -294,71 +299,77 @@ router.get('/initBalloonColorList', function (req, res) {
 
 
 /**
- *
  * 슬로건 컬러 디비초기화
- *
  */
-
 router.get('/initSloganColorList', function (req, res) {
-
-    sloganColorListSheet.getRows(1, function (err, rowData) {
-
+    const sloganColorSheetNum = 2;
+    sloganColorListSheet.getRows(sloganColorSheetNum, function (err, rowData) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
         }
 
         var rowKeys = Object.keys(rowData);
-        rowKeys.forEach(function (key) {
-            var keys = Object.keys(rowData[key]);
+        const multi = redisClient.multi();
+        multi.select(0);
 
-            var multi = redisClient.multi();
-            multi.select(0)
-                .sadd(getSloganColor(), rowData[key][keys[3]])
-                .exec(function (err) {
-                    if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                        return;
-                    }
-                });
+        rowKeys.forEach(function (key) {
+            if (key == 0) {
+                return;
+            }
+
+            var keys = Object.keys(rowData[key]);
+            multi.sadd(getSloganColor(), rowData[key][keys[4]]);
+
         });
-        sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+
+        multi.exec(function (err) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
+            sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+        });
+
 
     });
 });
 
 
 /**
- *
  * 상점 풍선모양 및 가격 초기화
- *
  */
-
 router.get('/initShopBalloon', function (req, res) {
-
-    balloonShopListSheet.getRows(1, function (err, rowData) {
-
+    const balloonItemSheet = 1;
+    balloonShopListSheet.getRows(balloonItemSheet, function (err, rowData) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
         }
 
         var rowKeys = Object.keys(rowData);
-        rowKeys.forEach(function (key) {
-            var keys = Object.keys(rowData[key]);
 
-            var multi = redisClient.multi();
-            multi.select(0)
-                .hset(getShopBalloon(), rowData[key][keys[3]], rowData[key][keys[4]])
-                .exec(function (err) {
-                    if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                        return;
-                    }
-                });
+        const multi = redisClient.multi();
+        multi.select(0);
+
+        rowKeys.forEach(function (key) {
+            if (key == 0) {
+                return;
+            }
+
+            var keys = Object.keys(rowData[key]);
+            multi.hset(getShopBalloon(), rowData[key][keys[5]], rowData[key][keys[6]]);
         });
 
-        sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+        multi.exec(function (err) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
+            sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+        });
     });
 });
 
@@ -370,13 +381,11 @@ router.get('/initShopBalloon', function (req, res) {
  */
 
 router.get('/initFandomBalloonRank', function (req, res) {
-
     var multi = redisClient.multi();
     multi.select(0)
         .zrange(getFandomUserNumber(), 0, -1)
         .smembers(getBalloonColor())
         .exec(function (err, replies) {
-
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
@@ -401,7 +410,6 @@ router.get('/initFandomBalloonRank', function (req, res) {
                 }
                 sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
             });
-
         });
 });
 
@@ -411,14 +419,11 @@ router.get('/initFandomBalloonRank', function (req, res) {
  * 전체 팬덤 점수 랭킹 초기화
  *
  */
-
 router.get('/initFandomRank', function (req, res) {
-
     var multi = redisClient.multi();
     multi.select(0)
         .zrange(getFandomUserNumber(), 0, -1)
         .exec(function (err, reply) {
-
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
@@ -438,11 +443,12 @@ router.get('/initFandomRank', function (req, res) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                     return;
                 }
-            });
 
-            sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+                sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+            });
         });
 });
+
 
 /**
  *
@@ -453,32 +459,21 @@ function getNotice() {
     return 'notice';
 }
 router.get('/initNotice', function (req, res) {
-
     noticeSheet.getRows(1, function (err, rowData) {
-
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
         }
+        const data = rowData[0];
+        redisClient.set(getNotice(), data.notice, function (err) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
 
-        var rowKeys = Object.keys(rowData);
-        rowKeys.forEach(function (key) {
-            var keys = Object.keys(rowData[key]);
-
-            var multi = redisClient.multi();
-            multi.select(0)
-                .sadd(getNotice(), rowData[key][keys[3]])
-                .exec(function (err) {
-                    if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                        return;
-                    }
-                });
+            sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
         });
-
-        sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
     });
-
 });
 /*--------------------------------- 초기화 ---------------------------------*/
 
@@ -492,9 +487,7 @@ router.get('/initNotice', function (req, res) {
  * 추후 이 아이디는 사용자 고유의 key값이 될 것
  *
  */
-
 router.post('/join', function (req, res) {
-
     consoleInputLog(req.body);
     var id = req.body.id;
 
@@ -503,7 +496,7 @@ router.post('/join', function (req, res) {
         return;
     }
 
-    var user = {
+    var userInfo = {
         id: id,
         coinCount: 0,
         balloonCount: 0,
@@ -514,6 +507,9 @@ router.post('/join', function (req, res) {
         selectedSloganText: '',
         selectedBalloonColor: '분홍',
         selectedBalloonShape: 'basic',
+        sloganURL: 'http://www.fandomcup.com',
+        profileImg: 1,
+        background: "255-255-255",
         level: 1
     };
 
@@ -521,7 +517,6 @@ router.post('/join', function (req, res) {
     multi.select(0)
         .exists(getUserInfo(id))
         .exec(function (err, reply) {
-
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
@@ -532,18 +527,18 @@ router.post('/join', function (req, res) {
                 var multi = redisClient.multi();
                 multi.select(0)
                     .sadd(getUserID(), id)
-                    .hmset(getUserInfo(id), user)
-                    .sadd(getUserBalloonList(id), user.selectedBalloonShape)
+                    .hmset(getUserInfo(id), userInfo)
+                    .sadd(getUserBalloonList(id), userInfo.selectedBalloonShape)
                     .exec(function (err) {
                         if (err) {
                             sendMessage.sendErrorMessage(res, ERROR_JOIN_FAIL, err);
                             return;
                         }
-                        var multi = redisClient.multi();
+                        const multi = redisClient.multi();
                         multi.select(1);
 
                         for (var i = 0; i < GAME_BOARD; i++) {
-                            multi.hmset(getUserGameInfo(id, i), getFieldGameBalloon(), 1, getFieldStarType(), 0);
+                            multi.hmset(getUserGameInfo(id, i), getFieldGameBalloon(), 1, getFieldStarType(), 0, 'pin', 0);
                         }
 
                         multi.exec(function (err) {
@@ -602,7 +597,6 @@ function getCanGameUser(fandomName) {
 }
 
 router.post('/joinFandom', function (req, res) {
-
     consoleInputLog(req.body);
 
     var id = req.body.id;
@@ -620,7 +614,6 @@ router.post('/joinFandom', function (req, res) {
         .zcard(getFandomRank())
         .zrank(getFandomRank(), fandomName)
         .exec(function (err, replies) {
-
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_FANDOM_RANK_LOAD, err);
                 return;
@@ -634,7 +627,6 @@ router.post('/joinFandom', function (req, res) {
             multi.select(1)
                 .hgetall(getGameLevelRatio())
                 .exec(function (err, reply) {
-
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_LEVEL_RATIO_LOAD, err);
                         return;
@@ -657,7 +649,6 @@ router.post('/joinFandom', function (req, res) {
                         .zincrby(getFandomUserNumber(), 1, fandomName)
                         .sadd(getCanGameUser(fandomName), id)
                         .exec(function (err) {
-
                             if (err) {
                                 sendMessage.sendErrorMessage(res, ERROR_JOIN_FANDOM_FAIL, err);
                                 return;
@@ -1038,8 +1029,6 @@ router.post('/userBalloonList', function (req, res) {
  */
 
 router.post('/userInfo', function (req, res) {
-
-    consoleInputLog(req.body);
     var id = req.body.id;
 
     if (!id) {
@@ -1274,7 +1263,6 @@ router.get('/getNotice', function (req, res) {
     multi.select(0)
         .srandmember(getNotice())
         .exec(function (err, reply) {
-
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
@@ -1286,4 +1274,63 @@ router.get('/getNotice', function (req, res) {
 });
 
 
+router.post('/profileImage', function (req, res) {
+    const id = req.body.id;
+
+    if (!id) {
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+    redisClient.select(0);
+    redisClient.hget(getUserInfo(id), 'profileImg', function (err, profileImg) {
+        let path = '../images/' + profileImg + ".png";
+
+        fs.access(path, fs.F_OK, function (err) {
+            if (err) {
+                path = '../images/1.png';
+            }
+
+            res.download(path);
+        });
+    });
+});
+
+
+router.post('/delUser', function (req, res) {
+    const id = req.body.id;
+
+    if (!id) {
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+    redisClient.hgetall(getuserInfo(id), function (err, userInfo) {
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            return;
+        }
+
+        const multi = redisClient.multi();
+        multi.select(0)
+            .zincrby(getFandomUserNumber(), -1, userInfo.fandomName)
+            .del(getUserInfo(id))
+            .del(getUserBalloonList(id))
+            .srem(getUserID(), id)
+            .select(1);
+
+        for (let i = 0; i < GAME_BOARD; i++) {
+            mulit.del(getUserGameInfo(id, i));
+        }
+        multi.exec(function (err) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
+            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+        });
+    });
+
+});
 module.exports = router;

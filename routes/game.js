@@ -1,6 +1,9 @@
 var express = require('express');
 var redis = require('redis');
-var redisClient = redis.createClient(6379,'192.168.11.4');
+var moment = require('moment');
+var _ = require('underscore');
+
+var redisClient = redis.createClient(6379, '192.168.11.4');
 var router = express.Router();
 var GoogleSpreadsheet = require("google-spreadsheet");
 var balloonBlowSpeedSheet = new GoogleSpreadsheet('1GDBrKUfyqo4LAK0BuSyjJ6FETMj3yljxUVyHYCLnPxk');
@@ -41,7 +44,6 @@ function addMethod(object, functionName, func) {
 }
 
 
-
 function SendMessage() {
     addMethod(this, "sendSucceedMessage", function (res, succeedCode) {
         res.send({succeedCode: succeedCode});
@@ -72,6 +74,7 @@ function SetUserLogining() {
         multi.select(2)
             .sadd(userId, protocol)
             .expire(userId, LOGIN_VALID_TIME)
+
             .exec(function (err) {
                 if (err) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -95,19 +98,32 @@ function SetUserLogining() {
             });
     });
 
-    addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, competitorGameInfo) {
+    addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, matchedInfo, competitorGameInfo) {
         var multi = redisClient.multi();
         multi.select(2)
             .sadd(userId, 'gameStart')
             .expire(userId, LOGIN_VALID_TIME)
             .sadd(competitorId, 'gaming')
             .expire(competitorId, GAME_TIME)
+            .select(0)
             .exec(function (err) {
                 if (err) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                     return;
                 }
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, competitorGameInfo);
+
+                redisClient.get(getUserMatchedList(userId), function (err, info) {
+                    info.matchedInfo = matchedInfo;
+
+                    redisClient.set(getUserMatchedList(userId), info, function (err) {
+                        if (err) {
+                            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                            return;
+                        }
+
+                        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, competitorGameInfo);
+                    });
+                });
             });
     });
 }
@@ -129,6 +145,7 @@ function getFandomRank() {
 function getFandomUserNumber() {
     return 'fandomUserNumber';
 }
+
 function getGameBlowSpeed() {
     return 'gameBlowSpeed';
 }
@@ -140,6 +157,7 @@ function getGameLevelRatio() {
 function getUserInfo(userId) {
     return 'userInfo:' + userId;
 }
+
 function getHasStarByLevel() {
     return 'hasStarByLevel';
 }
@@ -207,6 +225,10 @@ function getFieldDelay() {
     return 'delay';
 }
 
+function getUserMatchedList(userId) {
+    return 'user:' + userId + ":matched";
+}
+
 /**
  *
  * 게임에 필요한 기본 정보 db 초기화
@@ -214,7 +236,6 @@ function getFieldDelay() {
  */
 
 router.get('/initBalloonBlowSpeedInfo', function (req, res) {
-
     balloonBlowSpeedSheet.getRows(1, function (err, rowData) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
@@ -241,16 +262,12 @@ router.get('/initBalloonBlowSpeedInfo', function (req, res) {
     });
 });
 
+
 /**
- *
  * 레벨 부여 비율 db 초기화 함수
- *
  */
-
 router.get('/initLevelRatio', function (req, res) {
-
     gameLevelRatioSheet.getRows(1, function (err, rowData) {
-
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
@@ -283,7 +300,6 @@ router.get('/initLevelRatio', function (req, res) {
  */
 
 router.get('/initHasStarByLevel', function (req, res) {
-
     hasStarByLevelSheet.getRows(1, function (err, rowData) {
 
         if (err) {
@@ -345,7 +361,6 @@ router.post('/userHaveStarNumber', function (req, res) {
             multi.select(1)
                 .hget(getHasStarByLevel(), userLevel)
                 .exec(function (err, reply) {
-
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                         return;
@@ -387,6 +402,7 @@ var searchCompetitorId = function (fandomExistingUserList, count, callback) {
                 .exec(function (err, reply) {
                     ++count;
                     var isLogining = reply[1];
+
                     if (count == 5) {
                         competitorId = null;
                         callback(competitorId);
@@ -473,7 +489,6 @@ var getCompetitorUserInfo = function (competitorId, callback) {
  */
 
 router.post('/gameStart', function (req, res) {
-
     consoleInputLog(req.body);
     var userFandomName = req.body.fandomName;
     var userId = req.body.userId;
@@ -517,7 +532,12 @@ router.post('/gameStart', function (req, res) {
                     }
 
                     getCompetitorUserInfo(competitorId, function (result) {
-                        setUserLogining.setUserLoginingMatched(res, userId, competitorId, result);
+                        const time = moment(Date.now()).format('YYYY-MM-DD HH:mm');
+                        const matchedInfo = {
+                            competitorInfo: result.competitorInfo,
+                            time: time
+                        };
+                        setUserLogining.setUserLoginingMatched(res, userId, competitorId, matchedInfo, result);
                     });
                 });
             }
@@ -580,7 +600,6 @@ router.post('/gameOver', function (req, res) {
                 }
 
                 setUserLogining.setUserLogining(res, userId, 'gameOver');
-
             });
         });
 });
@@ -618,7 +637,24 @@ router.post('/settingDefenseMode', function (req, res) {
         }
 
         setUserLogining.setUserLogining(res, id, 'settingDefenseMode');
+    });
+});
 
+
+router.get('/userMatchedList', function (req, res) {
+    const id = req.body.id;
+    redisClient.select(0);
+
+    redisClient.get(getUserMatchedList(id), function (err, matchedInfo) {
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            return;
+        }
+
+        if (_.isEmpty(matchedInfo)) {
+            matchedInfo = [];
+        }
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: matchedInfo});
     });
 });
 
