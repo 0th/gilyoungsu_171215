@@ -2,7 +2,7 @@ var express = require('express');
 var redis = require('redis');
 var moment = require('moment');
 var _ = require('underscore');
-var redisClient = redis.createClient(6388, '127.0.0.1');
+var redisClient = redis.createClient(6379, '127.0.0.1');
 var router = express.Router();
 var GoogleSpreadsheet = require("google-spreadsheet");
 var gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
@@ -21,7 +21,6 @@ const GAME_BOARD = 36;
  * 로그인 세션 시간 상수화
  *
  */
-
 const LOGIN_VALID_TIME = 60;
 const GAME_TIME = 30;
 
@@ -98,14 +97,36 @@ function SetUserLogining() {
     });
 
     addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, competitorGameInfo) {
-        var multi = redisClient.multi();
+        const history = _.omit(competitorGameInfo, 'competitorGameInfos', 'competitorGameCountInfo');
+        const multi = redisClient.multi();
         multi.select(2)
             .sadd(userId, 'gameStart')
             .expire(userId, LOGIN_VALID_TIME)
             .sadd(competitorId, 'gaming')
             .expire(competitorId, GAME_TIME)
             .select(1)
-            .lpush(getUserMatchedList(userId), JSON.stringify(competitorGameInfo))
+            .lpush(getUserMatchedList(competitorId), JSON.stringify(history))
+            .select(0)
+            .exec(function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, competitorGameInfo);
+            });
+    });
+
+    addMethod(this, "setUserRevenge", function (res, userId, competitorId, competitorGameInfo, userInfo) {
+        const history = _.omit(userInfo, 'competitorGameInfos', 'competitorGameCountInfo');
+        const multi = redisClient.multi();
+        multi.select(2)
+            .sadd(userId, 'gameStart')
+            .expire(userId, LOGIN_VALID_TIME)
+            .sadd(competitorId, 'gaming')
+            .expire(competitorId, GAME_TIME)
+            .select(1)
+            .lpush(getUserMatchedList(competitorId), JSON.stringify(history))
+            .select(0)
             .exec(function (err) {
                 if (err) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -363,7 +384,6 @@ var getCompetitorUserInfo = function (competitorId, callback) {
                 result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
 
                 callback(result);
-
             });
         });
 };
@@ -444,7 +464,6 @@ router.post('/gameStart', function (req, res) {
  */
 
 router.post('/gameOver', function (req, res) {
-
     consoleInputLog(req.body);
     var userId = req.body.userId;
     var userFandomName = req.body.userFandomName;
@@ -525,10 +544,15 @@ router.post('/settingDefenseMode', function (req, res) {
 });
 
 
-router.get('/userMatchedList', function (req, res) {
+router.post('/userMatchedList', function (req, res) {
     const id = req.body.id;
-    redisClient.select(1);
 
+    if (_.isEmpty(id)) {
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+    redisClient.select(1);
     redisClient.lrange(getUserMatchedList(id), 0, 50, function (err, matchedInfo) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -537,10 +561,62 @@ router.get('/userMatchedList', function (req, res) {
 
         if (_.isEmpty(matchedInfo)) {
             matchedInfo = [];
+            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: matchedInfo});
+            return;
         }
 
-        console.log(matchedInfo);
-        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: matchedInfo});
+        const histories = [];
+
+        _.each(matchedInfo, function (info) {
+            histories.push(JSON.parse(info));
+        });
+
+        const multi = redisClient.multi();
+        multi.select(2);
+
+        _.each(histories, function (info) {
+            multi.exists(info.competitorInfo.id);
+        });
+
+        multi.exec(function (err, isExists) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
+            isExists.forEach(function (exist, index) {
+                if (index == 0)
+                    return;
+
+                if (exist)
+                    histories[index - 1].canGame = 'false';
+
+                else {
+                    histories[index - 1].canGame = 'true';
+                }
+            });
+            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: histories});
+        });
+    });
+});
+
+
+router.post('/gameMatch', function (req, res) {
+    const id = req.body.id;
+    const revengedId = req.body.revengedId;
+
+    getCompetitorUserInfo(revengedId, function (result) {
+        if (_.isEmpty(result)) {
+            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            return;
+        }
+
+        getCompetitorUserInfo(id, function (userInfo) {
+            const time = moment().format('YYYY.MM.DD HH:mm');
+            userInfo.time = time;
+
+            setUserLogining.setUserRevenge(res, id, revengedId, result, userInfo);
+        });
     });
 });
 

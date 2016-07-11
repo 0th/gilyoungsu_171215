@@ -1,6 +1,6 @@
 var express = require('express');
 var redis = require('redis');
-var redisClient = redis.createClient(6388, '127.0.0.1');
+var redisClient = redis.createClient(6379, '127.0.0.1');
 var router = express.Router();
 var _ = require('underscore');
 const fs = require('fs');
@@ -123,10 +123,6 @@ function getFandomUserNumber() {
 
 function getBalloonColor() {
     return 'balloonColor';
-}
-
-function getSloganColor() {
-    return 'sloganColor';
 }
 
 function getShopBalloon() {
@@ -423,6 +419,7 @@ router.get('/initNotice', function (req, res) {
             return;
         }
         const data = rowData[0];
+        redisClient.select(0);
         redisClient.set(getNotice(), data.notice, function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -551,7 +548,6 @@ router.get('/fandomUserNumberRank', function (req, res) {
  *
  *  TODO: 압정 개수 팬덤 레벨별 초기화
  */
-
 function getCanGameUser(fandomName) {
     return 'canGameUser:' + fandomName;
 }
@@ -1074,6 +1070,7 @@ router.post('/settingSlogan', function (req, res) {
         return;
     }
 
+    redisClient.select(0);
     redisClient.hget(getUserInfo(id), getFieldHasSlogan(), function (err, hasSlogan) {
         if (hasSlogan == 0) {
             sendMessage.sendErrorMessage(res, ERROR_SLOGAN_NOT_PURCAHSE);
@@ -1086,7 +1083,7 @@ router.post('/settingSlogan', function (req, res) {
                 sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
                 return;
             }
-
+            redisClient.select(0);
             redisClient.hmset(getUserInfo(id), 'url', url, 'selectedSloganText', sloganText, function (err) {
                 if (err) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -1191,29 +1188,6 @@ router.get('/getNotice', function (req, res) {
         });
 });
 
-
-router.post('/profileImage', function (req, res) {
-    const id = req.body.id;
-
-    if (!id) {
-        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
-        return;
-    }
-
-    redisClient.select(0);
-    redisClient.hget(getUserInfo(id), 'profileImg', function (err, profileImg) {
-        let path = '../images/' + profileImg + ".png";
-
-        fs.access(path, fs.F_OK, function (err) {
-            if (err) {
-                path = '../images/1.png';
-            }
-
-            res.download(path);
-        });
-    });
-});
-
 function getUserMatchedList(userId) {
     return 'user:' + userId + ":matched";
 }
@@ -1291,6 +1265,28 @@ router.get('/background', function (req, res) {
 
     sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, COLOR_LIST);
 });
+
+
+router.post('/setBackgroud', function (req, res) {
+    const id = req.body.id;
+    const background = req.body.background;
+
+    if (!id || !background) {
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+    redisClient.select(0);
+    redisClient.hset(getUserInfo(id), 'background', background, function (err) {
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            return;
+        }
+
+        setUserLogining.setUserLogining(res, id, 'setBackgroud');
+    });
+});
+
 
 
 module.exports = router;
