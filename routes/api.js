@@ -1,6 +1,6 @@
 var express = require('express');
 var redis = require('redis');
-var redisClient = redis.createClient(6379, '127.0.0.1');
+var redisClient = redis.createClient(6388, '127.0.0.1');
 var router = express.Router();
 var _ = require('underscore');
 const fs = require('fs');
@@ -497,7 +497,7 @@ router.post('/join', function (req, res) {
                         multi.select(1);
 
                         for (var i = 0; i < GAME_BOARD; i++) {
-                            multi.hmset(getUserGameInfo(id, i), getFieldGameBalloon(), 1, getFieldStarType(), 0);//, 'pin', 0);
+                            multi.hmset(getUserGameInfo(id, i), getFieldGameBalloon(), 1, getFieldStarType(), 0, 'pin', 0);
                         }
 
                         multi.exec(function (err) {
