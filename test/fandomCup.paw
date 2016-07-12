@@ -716,7 +716,7 @@
         <relationship name="request" type="0/1" destination="LMREQUEST" idrefs="z167"></relationship>
     </object>
     <object type="LMENVIRONMENTVARIABLEVALUE" id="z172">
-        <attribute name="value" type="string">http://127.0.0.1:4040/api/</attribute>
+        <attribute name="value" type="string">http://192.168.11.3:4040/api/</attribute>
         <relationship name="environment" type="1/1" destination="LMENVIRONMENT" idrefs="z173"></relationship>
         <relationship name="variable" type="1/1" destination="LMENVIRONMENTVARIABLE" idrefs="z174"></relationship>
     </object>
@@ -749,7 +749,7 @@
         <relationship name="values" type="0/0" destination="LMENVIRONMENTVARIABLEVALUE" idrefs="z177"></relationship>
     </object>
     <object type="LMENVIRONMENTVARIABLEVALUE" id="z177">
-        <attribute name="value" type="string">http://127.0.0.1:4040/game/</attribute>
+        <attribute name="value" type="string">http://192.168.11.3:4040/game/</attribute>
         <relationship name="environment" type="1/1" destination="LMENVIRONMENT" idrefs="z173"></relationship>
         <relationship name="variable" type="1/1" destination="LMENVIRONMENTVARIABLE" idrefs="z176"></relationship>
     </object>
