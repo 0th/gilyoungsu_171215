@@ -1,6 +1,6 @@
 var express = require('express');
 var redis = require('redis');
-var redisClient = redis.createClient(6379, '127.0.0.1');
+var redisClient = redis.createClient(6388, '192.168.11.3');
 var router = express.Router();
 var _ = require('underscore');
 const fs = require('fs');
