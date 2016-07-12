@@ -140,6 +140,7 @@ function getFandomRank() {
 function getUserID() {
     return 'userIdList';
 }
+
 function getUserInfo(userId) {
     return 'user:' + userId + ":info";
 }
@@ -1201,7 +1202,7 @@ router.post('/delUser', function (req, res) {
     }
 
     redisClient.select(0);
-    redisClient.hgetall(getuserInfo(id), function (err, userInfo) {
+    redisClient.hgetall(getUserInfo(id), function (err, userInfo) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
             return;
@@ -1217,7 +1218,7 @@ router.post('/delUser', function (req, res) {
             .del(getUserMatchedList(id));
 
         for (let i = 0; i < GAME_BOARD; i++) {
-            mulit.del(getUserGameInfo(id, i));
+            multi.del(getUserGameInfo(id, i));
         }
         multi.exec(function (err) {
             if (err) {

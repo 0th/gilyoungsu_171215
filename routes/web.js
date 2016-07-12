@@ -59,6 +59,10 @@ router.get('/', function (req, res) {
             sendReply(res, ERROR_DATABASE);
             return;
         }
+        if (_.isEmpty(allFandomRank)) {
+            sendReply(res, NOT_EXIST_FANDOM_DATA);
+            return;
+        }
 
         const fandoms = [];
 
@@ -83,6 +87,8 @@ router.get('/', function (req, res) {
                 return;
             }
 
+            const fandomData = [];
+
             fandoms.forEach(function (each, index) {
                 const data = fandoms[index];
 
@@ -90,10 +96,10 @@ router.get('/', function (req, res) {
                 data.firstUser = reply[(index * 3) + 1] == null ? "" : reply[(index * 3) + 1];
                 data.userNum = reply[(index * 3) + 2] == null ? 0 : reply[index * 3 + 2];
 
-                fandoms.push(data);
+                fandomData.push(data);
             });
 
-            sendReply(res, null, {data: fandoms});
+            sendReply(res, null, {data: fandomData});
         });
     });
 });
