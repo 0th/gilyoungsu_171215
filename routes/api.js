@@ -1267,7 +1267,7 @@ router.get('/background', function (req, res) {
 });
 
 
-router.post('/setBackgroud', function (req, res) {
+router.post('/setBackground', function (req, res) {
     const id = req.body.id;
     const background = req.body.background;
 
