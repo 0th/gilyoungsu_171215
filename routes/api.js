@@ -27,6 +27,7 @@ const ERROR_JOIN_FANDOM_FAIL = 408;
 const ERROR_INIT_GAME_INFO_FAIL = 409;
 const ERROR_LOGIN_FAIL = 401;
 const ERROR_DATA_NOT_EXIST = 402;
+const ERROR_NOT_EXIST_USER = 403;
 const ERROR_SLOGAN_NOT_PURCAHSE = 808;
 const ERROR_LOGINED = 909;
 const SUCCEED_INIT_DB = 701;
@@ -45,6 +46,7 @@ message[ERROR_DATA_NOT_EXIST] = "DB 데이터가 존재하지 않습니다";
 message[ERROR_LOGIN_FAIL] = "회원가입이 되어있지 않습니다";
 message[ERROR_SLOGAN_NOT_PURCAHSE] = "슬로건을 구입하지 않은 사용자입니다";
 message[ERROR_LOGINED] = "이미 로그인 되어있는 사용자 입니다";
+message[ERROR_NOT_EXIST_USER] = "유저가 존재하지 않습니다";
 
 
 function addMethod(object, functionName, func) {
@@ -467,8 +469,6 @@ router.post('/join', function (req, res) {
         background: "초록",
         level: 1
     };
-
-    console.log(userInfo);
 
     var multi = redisClient.multi();
     multi.select(0)
@@ -1208,12 +1208,19 @@ router.post('/delUser', function (req, res) {
             return;
         }
 
+        if (_.isEmpty(userInfo)) {
+            sendMessage.sendErrorMessage(res, ERROR_NOT_EXIST_USER, err);
+            return;
+        }
+
         const multi = redisClient.multi();
         multi.select(0)
             .zincrby(getFandomUserNumber(), -1, userInfo.fandomName)
+            .zincrby(getFandomBalloonRank(userInfo.fandomName), -1, userInfo.selectedBalloonColor)
             .del(getUserInfo(id))
             .del(getUserBalloonList(id))
             .srem(getUserID(), id)
+            .srem(getCanGameUser(userInfo.fandomName), id)
             .select(1)
             .del(getUserMatchedList(id));
 
