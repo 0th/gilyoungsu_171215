@@ -6,9 +6,9 @@ var _ = require('underscore');
 const fs = require('fs');
 
 var GoogleSpreadSheet = require("google-spreadsheet");
-var fandomListSheet = new GoogleSpreadSheet('1hYCLWNC4R3a70fAeU0OkejDp6VOjaoiZTEDIyP7GBtI');
-var balloonColorListSheet = new GoogleSpreadSheet('1VfbrYs1UZJK1g-mRTNP6u_dk8w2zpjXxPQq-ocGY9UE');
-var balloonShopListSheet = new GoogleSpreadSheet('1VfbrYs1UZJK1g-mRTNP6u_dk8w2zpjXxPQq-ocGY9UE');
+var fandomListSheet = new GoogleSpreadSheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjBQZuYqH5vQ');
+var balloonColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
+var balloonShopListSheet = new GoogleSpreadSheet('1eu3ufiAguhojmI0dSkSG0bySoNdwNezzbrxJawsE7ho');
 var noticeSheet = new GoogleSpreadSheet('1fSC13hjAqYxjr9mFDoDSf7ZvkpOl2dUiOid7bqf2Ft4');
 var logger = require('../functions/logger');
 
@@ -47,7 +47,6 @@ message[ERROR_LOGIN_FAIL] = "회원가입이 되어있지 않습니다";
 message[ERROR_SLOGAN_NOT_PURCAHSE] = "슬로건을 구입하지 않은 사용자입니다";
 message[ERROR_LOGINED] = "이미 로그인 되어있는 사용자 입니다";
 message[ERROR_NOT_EXIST_USER] = "유저가 존재하지 않습니다";
-
 
 function addMethod(object, functionName, func) {
     var overloadingFunction = object[functionName];
@@ -263,7 +262,7 @@ router.get('/initFandomUserNumber', function (req, res) {
  *
  */
 router.get('/initBalloonColorList', function (req, res) {
-    const balloonColorSheetNum = 2;
+    const balloonColorSheetNum = 1;
     balloonColorListSheet.getRows(balloonColorSheetNum, function (err, rowData) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
@@ -272,15 +271,11 @@ router.get('/initBalloonColorList', function (req, res) {
 
         var rowKeys = Object.keys(rowData);
         rowKeys.forEach(function (key) {
-            if (key <= 1) {
-                return;
-            }
-
             var keys = Object.keys(rowData[key]);
 
             var multi = redisClient.multi();
             multi.select(0)
-                .sadd(getBalloonColor(), rowData[key][keys[4]])
+                .sadd(getBalloonColor(), rowData[key][keys[3]])
                 .exec(function (err) {
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -290,7 +285,6 @@ router.get('/initBalloonColorList', function (req, res) {
         });
 
         sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
-
     });
 });
 
@@ -312,12 +306,12 @@ router.get('/initShopBalloon', function (req, res) {
         multi.select(0);
 
         rowKeys.forEach(function (key) {
-            if (key <= 1) {
+            if (key < 1) {
                 return;
             }
 
             var keys = Object.keys(rowData[key]);
-            multi.hset(getShopBalloon(), rowData[key][keys[5]], rowData[key][keys[6]]);
+            multi.hset(getShopBalloon(), rowData[key][keys[3]], rowData[key][keys[4]]);
         });
 
         multi.exec(function (err) {
@@ -546,8 +540,6 @@ router.get('/fandomUserNumberRank', function (req, res) {
  *  @id
  *  @fandomName
  *  @selectedBalloon
- *
- *  TODO: 압정 개수 팬덤 레벨별 초기화
  */
 function getCanGameUser(fandomName) {
     return 'canGameUser:' + fandomName;

@@ -502,8 +502,8 @@ router.post('/gameOver', function (req, res) {
             var multi = redisClient.multi();
             multi.select(1);
             for (var i = 0; i < GAME_BOARD; i++)
-                multi.hmset(getUserGameInfo(competitorId, i), getFieldGameBalloon(), splitedGameInfo[i * 2]
-                    , getFieldStarType(), splitedGameInfo[i * 2 + 1], 'pin', splitedGameInfo[i * 2 + 2]
+                multi.hmset(getUserGameInfo(competitorId, i), getFieldGameBalloon(), splitedGameInfo[i * 3]
+                    , getFieldStarType(), splitedGameInfo[i * 3 + 1], 'pin', splitedGameInfo[i * 3 + 2]
                 );
 
             multi.exec(function (err) {
@@ -540,7 +540,7 @@ router.post('/settingDefenseMode', function (req, res) {
     var multi = redisClient.multi();
     multi.select(1);
     for (var i = 0; i < GAME_BOARD; i++)
-        multi.hmset(getUserGameInfo(id, i), 'gameBalloon', splitedGameInfo[i * 2], 'starType', splitedGameInfo[i * 2 + 1], 'pin', splitedGameInfo[i * 2 + 2]);
+        multi.hmset(getUserGameInfo(id, i), 'gameBalloon', splitedGameInfo[i * 3], 'starType', splitedGameInfo[i * 3 + 1], 'pin', splitedGameInfo[i * 3 + 2]);
 
     multi.exec(function (err) {
         if (err) {
