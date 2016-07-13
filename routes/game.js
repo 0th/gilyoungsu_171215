@@ -96,8 +96,8 @@ function SetUserLogining() {
             });
     });
 
-    addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, competitorGameInfo) {
-        const history = _.omit(competitorGameInfo, 'competitorGameInfos', 'competitorGameCountInfo');
+    addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, competitorGameInfo, userInfo) {
+        //const history = _.omit(competitorGameInfo, 'competitorGameInfos', 'competitorGameCountInfo');
         const multi = redisClient.multi();
         multi.select(2)
             .sadd(userId, 'gameStart')
@@ -105,7 +105,7 @@ function SetUserLogining() {
             .sadd(competitorId, 'gaming')
             .expire(competitorId, GAME_TIME)
             .select(1)
-            .lpush(getUserMatchedList(userId), JSON.stringify(history))
+            .lpush(getUserMatchedList(competitorId), JSON.stringify(userInfo))
             .select(0)
             .exec(function (err) {
                 if (err) {
@@ -410,7 +410,6 @@ router.post('/gameStart', function (req, res) {
     multi.select(0)
         .zrange(getFandomUserNumber(), 0, -1, 'withscores')
         .exec(function (err, reply) {
-
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
@@ -440,9 +439,17 @@ router.post('/gameStart', function (req, res) {
                     }
 
                     getCompetitorUserInfo(competitorId, function (result) {
-                        const time = moment().format('YYYY.MM.DD HH:mm');
-                        result.time = time;
-                        setUserLogining.setUserLoginingMatched(res, userId, competitorId, result);
+                        redisClient.select(0);
+                        redisClient.hgetall(getUserInfo(userId), function (err, userInfo) {
+                            if (err) {
+                                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                                return;
+                            }
+
+                            const time = moment().format('YYYY.MM.DD HH:mm');
+                            userInfo.time = time;
+                            setUserLogining.setUserLoginingMatched(res, userId, competitorId, result, userInfo);
+                        });
                     });
                 });
             }
@@ -577,7 +584,7 @@ router.post('/userMatchedList', function (req, res) {
         multi.select(2);
 
         _.each(histories, function (info) {
-            multi.exists(info.competitorInfo.id);
+            multi.exists(info.id);
         });
 
         multi.exec(function (err, isExists) {
@@ -607,17 +614,30 @@ router.post('/gameMatch', function (req, res) {
     const id = req.body.id;
     const revengedId = req.body.revengedId;
 
-    getCompetitorUserInfo(revengedId, function (result) {
-        if (_.isEmpty(result)) {
+    redisClient.select(2);
+    redisClient.exists(revengedId, function (err, isExist) {
+        if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
             return;
         }
 
-        getCompetitorUserInfo(id, function (userInfo) {
-            const time = moment().format('YYYY.MM.DD HH:mm');
-            userInfo.time = time;
+        if (isExist) {
+            sendMessage.sendErrorMessage(res, ERROR_NO_MATCH, err);
+            return;
+        }
 
-            setUserLogining.setUserRevenge(res, id, revengedId, result, userInfo);
+        getCompetitorUserInfo(revengedId, function (result) {
+            if (_.isEmpty(result)) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
+            getCompetitorUserInfo(id, function (userInfo) {
+                const time = moment().format('YYYY.MM.DD HH:mm');
+                userInfo.time = time;
+
+                setUserLogining.setUserRevenge(res, id, revengedId, result, userInfo);
+            });
         });
     });
 });
