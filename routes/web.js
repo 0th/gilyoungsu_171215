@@ -78,7 +78,7 @@ router.get('/', function (req, res) {
         _.each(fandoms, function (fandom) {
             multi.zrevrange(getFandomBalloonRank(fandom.fandomName), 0, 0)
                 .zrevrange(getUserRank(fandom.fandomName), 0, 0)
-                .zscore(getFandomUserNumber(), fandom.fandomName)
+                .zscore(getFandomUserNumber(), fandom.fandomName);
         });
 
         multi.exec(function (err, reply) {
@@ -93,7 +93,14 @@ router.get('/', function (req, res) {
                 const data = fandoms[index];
 
                 data.firstBalloon = reply[index * 3];
-                data.firstUser = reply[(index * 3) + 1] == null ? "" : reply[(index * 3) + 1];
+                let firstUserId = reply[(index * 3) + 1];
+
+                if (firstUserId.length != 0) {
+                    const firstUserIds = firstUserId.toString().split(':');
+                    firstUserId = firstUserIds[2];
+                }
+
+                data.firstUser = firstUserId;
                 data.userNum = reply[(index * 3) + 2] == null ? 0 : reply[index * 3 + 2];
 
                 fandomData.push(data);

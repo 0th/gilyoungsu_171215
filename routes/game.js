@@ -159,6 +159,10 @@ function getGameLevelRatio() {
     return 'gameLevelRatio';
 }
 
+function getUserRank(fandomName) {
+    return 'userRank:' + fandomName;
+}
+
 function getUserInfo(userId) {
     return 'user:' + userId + ':info';
 }
@@ -354,24 +358,30 @@ var getCompetitorUserInfo = function (competitorId, callback) {
                 multi.hget(getUserGameInfo(competitorId, j), getFieldGameBalloon());
 
 
-            multi.hget(getHasStarByLevel(), competitorInfo.level);
+            multi.hget(getHasStarByLevel(), competitorInfo.level)
+                .select(0)
+                .zrank(getUserRank(competitorInfo.fandomName), competitorId);
             multi.exec(function (err, replies) {
                 if (err) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                     return;
                 }
-
+                console.log(replies);
                 var competitorGameInfos = [];
                 var competitorTotalBalloon = 0;
 
-                for (var i = 1; i < replies.length - 1; i++) {
+                for (var i = 1; i < replies.length - 3; i++) {
                     if (i <= GAME_BOARD)
                         competitorGameInfos.push(replies[i]);
                     else
                         competitorTotalBalloon += parseInt(replies[i]);
                 }
 
-                var competitorHasStarNumber = parseInt(replies[replies.length - 1]);
+                var competitorHasStarNumber = parseInt(replies[replies.length - 3]);
+                var competitorRank = parseInt(replies[replies.length - 1]) + 1;
+
+                competitorInfo.competitorRank = competitorRank;
+
                 var competitorGameCountInfo = {
                     'totalBalloon': competitorTotalBalloon,
                     'bigStar': parseInt(competitorHasStarNumber / 10),

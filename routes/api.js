@@ -16,7 +16,7 @@ const LOGIN_VALID_TIME = 60;
 const GAME_BOARD = 36;
 
 const ERROR_SHEET = 101;
-const ERROR_SERVER = 202;
+const ERROR_DATABASE = 202;
 const ERROR_ID_REPEATED = 303;
 const ERROR_WRONG_INPUT = 505;
 const ERROR_JOIN_FAIL = 404;
@@ -35,7 +35,7 @@ const SUCCEED_RESPONSE = 1;
 
 var message = {};
 message[ERROR_SHEET] = "구글 스프레드시트 오류";
-message[ERROR_SERVER] = "서버연결 실패";
+message[ERROR_DATABASE] = "데이터베이스 에러";
 message[ERROR_ID_REPEATED] = "아이디 중복으로 회원가입 실패";
 message[ERROR_INIT_GAME_INFO_FAIL] = "회원가입시 게임정보 초기화 실패";
 message[ERROR_WRONG_INPUT] = "입력값 오류";
@@ -90,7 +90,7 @@ function SetUserLogining() {
             .expire(userId, LOGIN_VALID_TIME)
             .exec(function (err) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                     return;
                 }
                 sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
@@ -104,7 +104,7 @@ function SetUserLogining() {
             .expire(userId, LOGIN_VALID_TIME)
             .exec(function (err) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                     return;
                 }
                 sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, sendData);
@@ -246,11 +246,12 @@ router.get('/initFandomUserNumber', function (req, res) {
                 .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]])
                 .exec(function (err) {
                     if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                        sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                         return;
                     }
                 });
         });
+
         sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
     });
 });
@@ -268,23 +269,21 @@ router.get('/initBalloonColorList', function (req, res) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
         }
+        const multi = redisClient.multi();
+        multi.select(0);
 
-        var rowKeys = Object.keys(rowData);
-        rowKeys.forEach(function (key) {
-            var keys = Object.keys(rowData[key]);
-
-            var multi = redisClient.multi();
-            multi.select(0)
-                .sadd(getBalloonColor(), rowData[key][keys[3]])
-                .exec(function (err) {
-                    if (err) {
-                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                        return;
-                    }
-                });
+        _.each(rowData, function (row) {
+            multi.sadd(getBalloonColor(), row.color);
         });
 
-        sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+        multi.exec(function (err) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                return;
+            }
+
+            sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+        });
     });
 });
 
@@ -316,7 +315,7 @@ router.get('/initShopBalloon', function (req, res) {
 
         multi.exec(function (err) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -338,7 +337,7 @@ router.get('/initFandomBalloonRank', function (req, res) {
         .smembers(getBalloonColor())
         .exec(function (err, replies) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -356,7 +355,7 @@ router.get('/initFandomBalloonRank', function (req, res) {
 
             multi.exec(function (err) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                     return;
                 }
                 sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
@@ -376,7 +375,7 @@ router.get('/initFandomRank', function (req, res) {
         .zrange(getFandomUserNumber(), 0, -1)
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -391,7 +390,7 @@ router.get('/initFandomRank', function (req, res) {
 
             multi.exec(function (err) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                     return;
                 }
 
@@ -419,7 +418,7 @@ router.get('/initNotice', function (req, res) {
         redisClient.select(0);
         redisClient.set(getNotice(), data.notice, function (err) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -455,7 +454,7 @@ router.post('/join', function (req, res) {
         starCount: 0,
         fandomName: '',
         hasSlogan: 0,
-        selectedSloganText: '',
+        selectedSloganText: '팬덤컵',
         selectedBalloonColor: '분홍',
         selectedBalloonShape: 'basic',
         sloganURL: 'http://www.fandomcup.com',
@@ -469,7 +468,7 @@ router.post('/join', function (req, res) {
         .exists(getUserInfo(id))
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -519,7 +518,7 @@ router.get('/fandomUserNumberRank', function (req, res) {
         .zrevrange(getFandomUserNumber(), 0, -1, 'withscores')
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -633,7 +632,7 @@ router.post('/login', function (req, res) {
         .exists(id)
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -647,7 +646,7 @@ router.post('/login', function (req, res) {
                     .exists(getUserInfo(id))
                     .exec(function (err, rep) {
                         if (err) {
-                            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                             return;
                         }
                         var isExisting = rep[1];
@@ -699,7 +698,7 @@ router.post('/fandomFirstBalloon', function (req, res) {
         .zrevrange(getFandomBalloonRank(fandomName), 0, 0)
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -723,7 +722,7 @@ router.get('/fandomBaseInfo', function (req, res) {
         .zrevrange(getFandomRank(), 0, -1, 'withscores')
         .exec(function (err, rep) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -746,7 +745,7 @@ router.get('/fandomBaseInfo', function (req, res) {
 
             multi.exec(function (err, rep) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                     return;
                 }
 
@@ -781,7 +780,7 @@ router.get('/balloonColorList', function (req, res) {
         .smembers(getBalloonColor())
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -805,7 +804,7 @@ router.get('/shopList', function (req, res) {
         .exec(function (err, rep) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -829,7 +828,7 @@ router.get('/fandomRankList', function (req, res) {
         .exec(function (err, reply) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -867,7 +866,7 @@ router.post('/allUserRankInFandom', function (req, res) {
 
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -892,7 +891,7 @@ router.post('/allUserRankInFandom', function (req, res) {
 
             multi.exec(function (err, reply) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                     return;
                 }
 
@@ -932,7 +931,7 @@ router.post('/userBalloonList', function (req, res) {
         .smembers(getUserBalloonList(id))
         .exec(function (err, reply) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -963,7 +962,7 @@ router.post('/userInfo', function (req, res) {
         .exec(function (err, reply) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -999,7 +998,7 @@ router.post('/main', function (req, res) {
 
     multi.exec(function (err, reply) {
         if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
             return;
         }
 
@@ -1036,7 +1035,7 @@ router.post('/purchaseSlogan', function (req, res) {
         .hset(getUserInfo(id), getFieldHasSlogan(), 1)
         .exec(function (err) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -1079,7 +1078,7 @@ router.post('/settingSlogan', function (req, res) {
             redisClient.select(0);
             redisClient.hmset(getUserInfo(id), 'url', url, 'selectedSloganText', sloganText, function (err) {
                 if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                     return;
                 }
 
@@ -1116,7 +1115,7 @@ router.post('/purchaseBalloon', function (req, res) {
         .exec(function (err) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -1155,7 +1154,7 @@ router.post('/settingBalloon', function (req, res) {
         .exec(function (err) {
 
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -1172,13 +1171,13 @@ router.post('/settingBalloon', function (req, res) {
 router.get('/getNotice', function (req, res) {
     redisClient.select(0);
     redisClient.get(getNotice(), function (err, notice) {
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                return;
-            }
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+            return;
+        }
 
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, notice);
-        });
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, notice);
+    });
 });
 
 function getUserMatchedList(userId) {
@@ -1196,7 +1195,7 @@ router.post('/delUser', function (req, res) {
     redisClient.select(0);
     redisClient.hgetall(getUserInfo(id), function (err, userInfo) {
         if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
             return;
         }
 
@@ -1221,7 +1220,7 @@ router.post('/delUser', function (req, res) {
         }
         multi.exec(function (err) {
             if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
@@ -1243,7 +1242,7 @@ router.post('/setProfile', function (req, res) {
     redisClient.select(0);
     redisClient.hset(getUserInfo(id), 'profile', profile, function (err) {
         if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
             return;
         }
 
@@ -1279,14 +1278,13 @@ router.post('/setBackground', function (req, res) {
     redisClient.select(0);
     redisClient.hset(getUserInfo(id), 'background', background, function (err) {
         if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
             return;
         }
 
         setUserLogining.setUserLogining(res, id, 'setBackgroud');
     });
 });
-
 
 
 module.exports = router;
