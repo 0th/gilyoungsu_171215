@@ -2,7 +2,7 @@ var express = require('express');
 var redis = require('redis');
 var moment = require('moment');
 var _ = require('underscore');
-var redisClient = redis.createClient(6388, '192.168.11.3');
+var redisClient = redis.createClient(6379, '127.0.0.1');
 var router = express.Router();
 var GoogleSpreadsheet = require("google-spreadsheet");
 var gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
@@ -117,7 +117,6 @@ function SetUserLogining() {
     });
 
     addMethod(this, "setUserRevenge", function (res, userId, competitorId, competitorGameInfo, userInfo) {
-        const history = _.omit(userInfo, 'competitorGameInfos', 'competitorGameCountInfo');
         const multi = redisClient.multi();
         multi.select(2)
             .sadd(userId, 'gameStart')
@@ -125,7 +124,7 @@ function SetUserLogining() {
             .sadd(competitorId, 'gaming')
             .expire(competitorId, GAME_TIME)
             .select(1)
-            .lpush(getUserMatchedList(competitorId), JSON.stringify(history))
+            .lpush(getUserMatchedList(competitorId), JSON.stringify(userInfo))
             .select(0)
             .exec(function (err) {
                 if (err) {
@@ -458,6 +457,8 @@ router.post('/gameStart', function (req, res) {
 
                             const time = moment().format('YYYY.MM.DD HH:mm');
                             userInfo.time = time;
+
+                            console.log(userInfo);
                             setUserLogining.setUserLoginingMatched(res, userId, competitorId, result, userInfo);
                         });
                     });
@@ -590,6 +591,7 @@ router.post('/userMatchedList', function (req, res) {
             histories.push(JSON.parse(info));
         });
 
+        console.log(histories);
         const multi = redisClient.multi();
         multi.select(2);
 
@@ -642,7 +644,13 @@ router.post('/gameMatch', function (req, res) {
                 return;
             }
 
-            getCompetitorUserInfo(id, function (userInfo) {
+            redisClient.select(0);
+            redisClient.hgetall(getUserInfo(id), function (err, userInfo) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+
                 const time = moment().format('YYYY.MM.DD HH:mm');
                 userInfo.time = time;
 

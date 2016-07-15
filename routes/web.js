@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const redis = require('redis');
-const redisClient = redis.createClient(6388, '192.168.11.3');
+const redisClient = redis.createClient(6379, '127.0.0.1');
 redisClient.select(0);
 
 const _ = require('underscore');
