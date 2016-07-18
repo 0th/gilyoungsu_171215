@@ -2,6 +2,7 @@ var express = require('express');
 var redis = require('redis');
 var moment = require('moment');
 var _ = require('underscore');
+const __ = require('lodash');
 var redisClient = redis.createClient(6388, '192.168.11.3');
 var router = express.Router();
 var GoogleSpreadsheet = require("google-spreadsheet");
@@ -573,7 +574,7 @@ router.post('/userMatchedList', function (req, res) {
     }
 
     redisClient.select(1);
-    redisClient.lrange(getUserMatchedList(id), 0, 50, function (err, matchedInfo) {
+    redisClient.lrange(getUserMatchedList(id), 0, -1, function (err, matchedInfo) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
             return;
@@ -591,11 +592,23 @@ router.post('/userMatchedList', function (req, res) {
             histories.push(JSON.parse(info));
         });
 
-        console.log(histories);
+
+        const userCount = __.countBy(histories, function (info) {
+            return info.id;
+        });
+
+        const result = __.chain(histories)
+            .uniqBy(info => info.id)
+            .map(info => {
+                info.count = userCount[info.id];
+                return info;
+            }).value();
+
+
         const multi = redisClient.multi();
         multi.select(2);
 
-        _.each(histories, function (info) {
+        _.each(result, function (info) {
             multi.exists(info.id);
         });
 
@@ -610,13 +623,13 @@ router.post('/userMatchedList', function (req, res) {
                     return;
 
                 if (exist)
-                    histories[index - 1].canGame = 'false';
+                    result[index - 1].canGame = false;
 
                 else {
-                    histories[index - 1].canGame = 'true';
+                    result[index - 1].canGame = true;
                 }
             });
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: histories});
+            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: result});
         });
     });
 });

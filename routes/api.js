@@ -241,6 +241,8 @@ router.get('/initFandomUserNumber', function (req, res) {
             }
 
             var keys = Object.keys(rowData[key]);
+
+            console.log(rowData[key][keys[5]]);
             var multi = redisClient.multi();
             multi.select(0)
                 .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]])
@@ -457,7 +459,7 @@ router.post('/join', function (req, res) {
         selectedSloganText: '팬덤컵',
         selectedBalloonColor: '분홍',
         selectedBalloonShape: 'basic',
-        sloganURL: 'http://www.fandomcup.com',
+        sloganURL: 'www.fandomcup.com',
         profileImg: 4,
         background: "초록",
         level: 1

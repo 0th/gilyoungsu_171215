@@ -1,5 +1,7 @@
 FROM node
 
+ENV TZ=Asia/Seoul
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 
