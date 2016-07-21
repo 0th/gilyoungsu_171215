@@ -457,11 +457,11 @@ router.post('/join', function (req, res) {
         fandomName: '',
         hasSlogan: 0,
         selectedSloganText: '팬덤컵',
-        selectedBalloonColor: '분홍',
+        selectedBalloonColor: '핑크',
         selectedBalloonShape: 'basic',
         sloganURL: 'www.fandomcup.com',
         profileImg: 4,
-        background: "초록",
+        background: "초록색",
         level: 1
     };
 
