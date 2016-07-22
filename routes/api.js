@@ -271,14 +271,15 @@ router.get('/initBalloonColorList', function (req, res) {
             sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
             return;
         }
-        const multi = redisClient.multi();
-        multi.select(0);
+
+        const balloonColors = [];
 
         _.each(rowData, function (row) {
-            multi.sadd(getBalloonColor(), row.color);
+            balloonColors.push(row.color);
         });
 
-        multi.exec(function (err) {
+        redisClient.select(0);
+        redisClient.set(getBalloonColor(), JSON.stringify(balloonColors), function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
@@ -777,19 +778,15 @@ router.get('/fandomBaseInfo', function (req, res) {
  *
  */
 router.get('/balloonColorList', function (req, res) {
-    var multi = redisClient.multi();
-    multi.select(0)
-        .smembers(getBalloonColor())
-        .exec(function (err, reply) {
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                return;
-            }
+    redisClient.select(0);
+    redisClient.get(getBalloonColor(), function (err, balloons) {
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+            return;
+        }
 
-            var balloons = reply[1];
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, balloons);
-
-        });
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, JSON.parse(balloons));
+    });
 });
 
 
