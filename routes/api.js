@@ -10,6 +10,7 @@ var fandomListSheet = new GoogleSpreadSheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjB
 var balloonColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
 var balloonShopListSheet = new GoogleSpreadSheet('1eu3ufiAguhojmI0dSkSG0bySoNdwNezzbrxJawsE7ho');
 var noticeSheet = new GoogleSpreadSheet('1fSC13hjAqYxjr9mFDoDSf7ZvkpOl2dUiOid7bqf2Ft4');
+var backgroundSheet = new GoogleSpreadSheet('1_AT0C1__Dt67lR4IiBYQxuGrCKUikR_kCy4b2lU05WQ');
 var logger = require('../functions/logger');
 
 const LOGIN_VALID_TIME = 60;
@@ -123,7 +124,7 @@ function getFandomUserNumber() {
 }
 
 function getBalloonColor() {
-    return 'balloonColor';
+    return 'color:balloon';
 }
 
 function getShopBalloon() {
@@ -272,14 +273,14 @@ router.get('/initBalloonColorList', function (req, res) {
             return;
         }
 
-        const balloonColors = [];
+        const multi = redisClient.multi();
+        multi.select(0);
 
-        _.each(rowData, function (row) {
-            balloonColors.push(row.color);
+        rowData.forEach(function (row, index) {
+            multi.zadd(getBalloonColor(), index, row.color);
         });
 
-        redisClient.select(0);
-        redisClient.set(getBalloonColor(), JSON.stringify(balloonColors), function (err) {
+        multi.exec(function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
@@ -337,7 +338,7 @@ router.get('/initFandomBalloonRank', function (req, res) {
     var multi = redisClient.multi();
     multi.select(0)
         .zrange(getFandomUserNumber(), 0, -1)
-        .smembers(getBalloonColor())
+        .zrange(getBalloonColor(), 0, -1)
         .exec(function (err, replies) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
@@ -411,6 +412,10 @@ router.get('/initFandomRank', function (req, res) {
 function getNotice() {
     return 'notice';
 }
+
+function getBackground() {
+    return 'color:background';
+}
 router.get('/initNotice', function (req, res) {
     noticeSheet.getRows(1, function (err, rowData) {
         if (err) {
@@ -429,6 +434,38 @@ router.get('/initNotice', function (req, res) {
         });
     });
 });
+
+
+/**
+ * 배경화면 색상 초기화
+ */
+router.get('/initBackground', function (req, res) {
+    backgroundSheet.getRows(1, function (err, row) {
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
+            return;
+        }
+
+        const multi = redisClient.multi();
+        multi.select(0);
+
+        _.each(row, function (each) {
+            const rgb = each.r + '-' + each.g + '-' + each.b;
+            multi.hset(getBackground(), each.filename, rgb);
+        });
+
+        multi.exec(function (err) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                return;
+            }
+
+            sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+        });
+    });
+});
+
+
 /*--------------------------------- 초기화 ---------------------------------*/
 
 
@@ -779,13 +816,13 @@ router.get('/fandomBaseInfo', function (req, res) {
  */
 router.get('/balloonColorList', function (req, res) {
     redisClient.select(0);
-    redisClient.get(getBalloonColor(), function (err, balloons) {
+    redisClient.zrange(getBalloonColor(), 0, -1, function (err, balloons) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
             return;
         }
 
-        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, JSON.parse(balloons));
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, balloons);
     });
 });
 
@@ -1250,18 +1287,21 @@ router.post('/setProfile', function (req, res) {
 });
 
 router.get('/background', function (req, res) {
-    const COLOR_LIST = [{"color": "빨강색", "RGB": "192-125-138"},
-        {"color": "주황색", "RGB": "192-158-125"},
-        {"color": "노랑색", "RGB": "192-189-125"},
-        {"color": "초록색", "RGB": "125-192-179"},
-        {"color": "파랑색", "RGB": "125-170-192"},
-        {"color": "남색", "RGB": "125-127-192"},
-        {"color": "보라색", "RGB": "192-125-173"},
-        {"color": "검정색", "RGB": "0-0-0"},
-        {"color": "흰색", "RGB": "255-255-255"}
-    ];
+    redisClient.select(0);
+    redisClient.hgetall(getBackground(), function (err, backgrounds) {
+        const colorList = [];
 
-    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, COLOR_LIST);
+        const colors = _.keys(backgrounds);
+
+        _.each(colors, function (color) {
+            const info = {};
+            info.color = color;
+            info.RGB = backgrounds[color];
+            colorList.push(info);
+        });
+
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, colorList);
+    });
 });
 
 
