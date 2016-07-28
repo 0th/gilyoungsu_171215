@@ -499,7 +499,7 @@ router.post('/join', function (req, res) {
         selectedBalloonShape: 'basic',
         sloganURL: 'www.fandomcup.com',
         profileImg: 4,
-        background: "초록색",
+        background: "bg_color_04",
         level: 1
     };
 
