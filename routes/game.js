@@ -100,7 +100,10 @@ function SetUserLogining() {
     });
 
     addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, competitorGameInfo, userInfo) {
-        //const history = _.omit(competitorGameInfo, 'competitorGameInfos', 'competitorGameCountInfo');
+        const matchedInfo = {};
+        matchedInfo.id = userInfo.id;
+        matchedInfo.time = userInfo.time;
+
         const multi = redisClient.multi();
         multi.select(2)
             .sadd(userId, 'gameStart')
@@ -108,7 +111,7 @@ function SetUserLogining() {
             .sadd(competitorId, 'gaming')
             .expire(competitorId, GAME_TIME)
             .select(1)
-            .lpush(getUserMatchedList(competitorId), JSON.stringify(userInfo))
+            .lpush(getUserMatchedList(competitorId), JSON.stringify(matchedInfo))
             .select(0)
             .exec(function (err) {
                 if (err) {
@@ -120,6 +123,10 @@ function SetUserLogining() {
     });
 
     addMethod(this, "setUserRevenge", function (res, userId, competitorId, competitorGameInfo, userInfo) {
+        const matchedInfo = {};
+        matchedInfo.id = userInfo.id;
+        matchedInfo.time = userInfo.time;
+
         const multi = redisClient.multi();
         multi.select(2)
             .sadd(userId, 'gameStart')
@@ -127,7 +134,7 @@ function SetUserLogining() {
             .sadd(competitorId, 'gaming')
             .expire(competitorId, GAME_TIME)
             .select(1)
-            .lpush(getUserMatchedList(competitorId), JSON.stringify(userInfo))
+            .lpush(getUserMatchedList(competitorId), JSON.stringify(matchedInfo))
             .select(0)
             .exec(function (err) {
                 if (err) {
@@ -593,50 +600,70 @@ router.post('/userMatchedList', function (req, res) {
             return;
         }
 
-        const histories = [];
-
-        _.each(matchedInfo, function (info) {
-            histories.push(JSON.parse(info));
-        });
-
-
-        const userCount = __.countBy(histories, function (info) {
-            return info.id;
-        });
-
-        const result = __.chain(histories)
-            .uniqBy(info => info.id)
-            .map(info => {
-                info.count = userCount[info.id];
-                return info;
-            }).value();
-
-
         const multi = redisClient.multi();
-        multi.select(2);
+        multi.select(0);
 
-        _.each(result, function (info) {
-            multi.exists(info.id);
+        matchedInfo.forEach(function (info) {
+            const matchedInfo = JSON.parse(info)
+            multi.hgetall(getUserInfo(matchedInfo.id));
         });
 
-        multi.exec(function (err, isExists) {
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+        multi.exec(function (err, matchedUserInfos) {
+            if (_.isEmpty(matchedUserInfos)) {
+                matchedInfo = [];
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: matchedInfo});
                 return;
             }
 
-            isExists.forEach(function (exist, index) {
+            const histories = [];
+
+            matchedUserInfos.forEach(function (info, index) {
                 if (index == 0)
                     return;
-
-                if (exist)
-                    result[index - 1].canGame = false;
-
-                else {
-                    result[index - 1].canGame = true;
-                }
+                const userInfo = _.extend(info, matchedInfo[index]);
+                histories.push(userInfo);
             });
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: result});
+
+            console.log(histories);
+
+            const userCount = __.countBy(histories, function (info) {
+                return info.id;
+            });
+
+            const result = __.chain(histories)
+                .uniqBy(info => info.id)
+                .map(info => {
+                    info.count = userCount[info.id];
+                    return info;
+                }).value();
+
+
+            const multi = redisClient.multi();
+            multi.select(2);
+
+            _.each(result, function (info) {
+                multi.exists(info.id);
+            });
+
+            multi.exec(function (err, isExists) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    return;
+                }
+
+                isExists.forEach(function (exist, index) {
+                    if (index == 0)
+                        return;
+
+                    if (exist)
+                        result[index - 1].canGame = false;
+
+                    else {
+                        result[index - 1].canGame = true;
+                    }
+                });
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: result});
+            });
         });
     });
 });

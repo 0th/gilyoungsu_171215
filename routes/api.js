@@ -251,6 +251,9 @@ router.get('/initFandomUserNumber', function (req, res) {
     });
 });
 
+const getBalloonColorRGB = function () {
+    return 'color:balloon:rgb'
+};
 
 /**
  *
@@ -270,6 +273,9 @@ router.get('/initBalloonColorList', function (req, res) {
 
         rowData.forEach(function (row, index) {
             multi.zadd(getBalloonColor(), index, row.color);
+
+            const rgb = row.r + '-' + row.g + '-' + row.b;
+            multi.hset(getBalloonColorRGB(), row.color, rgb);
         });
 
         multi.exec(function (err) {
@@ -1321,5 +1327,18 @@ router.post('/setBackground', function (req, res) {
     });
 });
 
+/**
+ * 풍선색상 RGB 받아오기
+ */
+router.get('/balloon/rgb', function (req, res) {
+    redisClient.select(0);
+    redisClient.hgetall(getBalloonColorRGB(), function (err, colorData) {
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+            return;
+        }
 
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, colorData);
+    });
+});
 module.exports = router;
