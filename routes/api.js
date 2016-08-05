@@ -207,14 +207,6 @@ function getFieldHasSlogan() {
     return 'hasSlogan';
 }
 
-function getFieldSelectedSloganText() {
-    return 'selectedSloganText';
-}
-
-function getFieldSelectedSloganColor() {
-    return 'selectedSloganColor';
-}
-
 function getFieldSelectedBalloonShape() {
     return 'selectedBalloonShape';
 }
@@ -832,7 +824,6 @@ router.get('/balloonColorList', function (req, res) {
  * 상점 풍선 모양 및 슬로건 가격 리스트 요청
  *
  */
-
 router.get('/shopList', function (req, res) {
     var multi = redisClient.multi();
     multi.select(0)
@@ -853,9 +844,7 @@ router.get('/shopList', function (req, res) {
 
 
 /**
- *
  * 전체 팬덤 점수 랭킹 리스트 요청
- *
  */
 router.get('/fandomRankList', function (req, res) {
     var multi = redisClient.multi();
@@ -885,7 +874,6 @@ router.get('/fandomRankList', function (req, res) {
  *  @fandomName
  *
  */
-
 router.post('/allUserRankInFandom', function (req, res) {
 
     consoleInputLog(req.body);
@@ -951,7 +939,6 @@ router.post('/allUserRankInFandom', function (req, res) {
  * @id
  *
  */
-
 router.post('/userBalloonList', function (req, res) {
 
     consoleInputLog(req.body);
@@ -983,7 +970,6 @@ router.post('/userBalloonList', function (req, res) {
  * @id
  *
  */
-
 router.post('/userInfo', function (req, res) {
     var id = req.body.id;
 
@@ -1015,7 +1001,6 @@ router.post('/userInfo', function (req, res) {
  * @id
  *
  */
-
 router.post('/main', function (req, res) {
 
     consoleInputLog(req.body);
@@ -1056,7 +1041,6 @@ router.post('/main', function (req, res) {
  * @id
  *
  */
-
 router.post('/purchaseSlogan', function (req, res) {
     consoleInputLog(req.body);
     var id = req.body.id;
@@ -1170,7 +1154,6 @@ router.post('/purchaseBalloon', function (req, res) {
  * @selectedBalloonColor
  *
  */
-
 router.post('/settingBalloon', function (req, res) {
 
     consoleInputLog(req.body);
@@ -1220,6 +1203,10 @@ function getUserMatchedList(userId) {
     return 'user:' + userId + ":matched";
 }
 
+/**
+ * 회원 탈퇴
+ * @id
+ */
 router.post('/delUser', function (req, res) {
     const id = req.body.id;
 
@@ -1265,7 +1252,11 @@ router.post('/delUser', function (req, res) {
     });
 });
 
-
+/**
+ * 프로필 설정
+ * @id
+ * @profile
+ */
 router.post('/setProfile', function (req, res) {
     const id = req.body.id;
     const profile = req.body.profile;
@@ -1286,6 +1277,9 @@ router.post('/setProfile', function (req, res) {
     });
 });
 
+/**
+ * 배경색상 받아오기
+ */
 router.get('/background', function (req, res) {
     redisClient.select(0);
     redisClient.hgetall(getBackground(), function (err, backgrounds) {
@@ -1304,7 +1298,9 @@ router.get('/background', function (req, res) {
     });
 });
 
-
+/**
+ * 배경색상 변경하기
+ */
 router.post('/setBackground', function (req, res) {
     const id = req.body.id;
     const background = req.body.background;

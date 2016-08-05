@@ -3,9 +3,11 @@ var redis = require('redis');
 var moment = require('moment');
 var _ = require('underscore');
 const __ = require('lodash');
+var GoogleSpreadsheet = require("google-spreadsheet");
+
 var redisClient = redis.createClient(6388, '192.168.11.3');
 var router = express.Router();
-var GoogleSpreadsheet = require("google-spreadsheet");
+
 var gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
 var hasStarByLevelSheet = new GoogleSpreadsheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
 
@@ -565,6 +567,11 @@ router.post('/settingDefenseMode', function (req, res) {
 });
 
 
+/**
+ * 유저의 게임매칭 리스트 받아오기
+ *
+ *  @ id
+ */
 router.post('/userMatchedList', function (req, res) {
     const id = req.body.id;
 
@@ -635,6 +642,11 @@ router.post('/userMatchedList', function (req, res) {
 });
 
 
+/**
+ * 복수 매칭
+ * @id
+ * @revengedId
+ */
 router.post('/gameMatch', function (req, res) {
     const id = req.body.id;
     const revengedId = req.body.revengedId;
