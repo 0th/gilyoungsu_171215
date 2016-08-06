@@ -620,11 +620,10 @@ router.post('/userMatchedList', function (req, res) {
             matchedUserInfos.forEach(function (info, index) {
                 if (index == 0)
                     return;
-                const userInfo = _.extend(info, matchedInfo[index]);
-                histories.push(userInfo);
-            });
 
-            console.log(histories);
+                _.extend(info, JSON.parse(matchedInfo[index - 1]));
+                histories.push(info);
+            });
 
             const userCount = __.countBy(histories, function (info) {
                 return info.id;
