@@ -1261,7 +1261,7 @@ router.post('/setProfile', function (req, res) {
     }
 
     redisClient.select(0);
-    redisClient.hset(getUserInfo(id), 'profile', profile, function (err) {
+    redisClient.hset(getUserInfo(id), 'profileImg', profile, function (err) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
             return;
