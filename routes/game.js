@@ -511,6 +511,7 @@ router.post('/gameOver', function (req, res) {
     multi.select(0)
         .hincrby(getUserInfo(userId), getFieldStarCount(), userGetStarCount)
         .zincrby(getFandomRank(), userGetStarCount, userFandomName)
+        .zincrby(getUserRank(userFandomName), userGetStarCount, userId)
         .hincrby(getUserInfo(userId), getFieldBalloonCount(), userGetBalloonCount)
         .hset(getUserInfo(userId), getFieldCoinCount(), userCoinCount)
         .exec(function (err) {

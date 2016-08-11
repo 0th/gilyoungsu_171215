@@ -1,0 +1,22 @@
+service:
+	fc-redis:
+		restart: always
+		container_name: fc-redis
+		image: redis
+		ports:
+			- "6379:6379"
+		volumes:
+			- ./redis:/data
+		command: redis-server --appendonly yes
+		
+	fc-api-app:
+		restart: always
+		build: ..
+		image: ourguide/fc-api-app
+		ports:
+			-"3033:3030"
+		links:
+			- fc-redis
+		container_name: fc-api-app
+		depends_on:
+			- fc-redis

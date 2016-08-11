@@ -187,14 +187,6 @@ function getFieldGameBalloon() {
     return 'gameBalloon';
 }
 
-function getFieldUserId() {
-    return 'id';
-}
-
-function getFieldStarCount() {
-    return 'starCount';
-}
-
 function getFieldSelectedBalloonColor() {
     return 'selectedBalloonColor';
 }
@@ -857,7 +849,6 @@ router.get('/fandomRankList', function (req, res) {
     multi.select(0)
         .zrevrange(getFandomRank(), 0, -1, 'withscores')
         .exec(function (err, reply) {
-
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
@@ -881,61 +872,59 @@ router.get('/fandomRankList', function (req, res) {
  *
  */
 router.post('/allUserRankInFandom', function (req, res) {
-
     consoleInputLog(req.body);
     var fandomName = req.body.fandomName;
+    const id = req.body.id;
 
-    if (!fandomName) {
+    if (!fandomName || !id) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
-    var multi = redisClient.multi();
-    multi.select(0)
-        .zrevrange(getUserRank(fandomName), 0, -1, 'withscores')
+    redisClient.select(0);
+    redisClient.zrevrange(getUserRank(fandomName), 0, -1, 'withscores', function (err, ranks) {
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+            return;
+        }
 
-        .exec(function (err, reply) {
+        if (_.isEmpty(ranks)) {
+            setUserLogining.setUserLogining(res, id, 'allUserRankInFandom', {});
+            return;
+        }
+
+        const rankInfo = [];
+
+        for (let i = 0; i < ranks.length; i = i + 2) {
+            const userInfo = {
+                id: ranks[i],
+                starCount: ranks[i + 1],
+                rank: i / 2 + 1
+            };
+
+            rankInfo.push(userInfo);
+        }
+
+        const multi = redisClient.multi();
+        multi.select(0);
+
+        for (let info of rankInfo)
+            multi.hgetall(getUserInfo(info.id));
+
+        multi.exec(function (err, userInfo) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
-            var allUserRankInFandoms = reply[1];
-            var allUserRankInFandom = [];
-            var userRankInFandom = [];
+            const data = [];
 
-            var multi = redisClient.multi();
-            multi.select(0);
+            for (let i = 0; i < userInfo.length - 1; i++)
+                data.push(_.extend(rankInfo[i], userInfo[i + 1]));
 
-            for (var i = 0; i < allUserRankInFandoms.length; i = i + 2) {
-                var eachRank = {};
-                var id = allUserRankInFandoms[i];
-                var starCount = allUserRankInFandoms[i + 1];
-                eachRank[getFieldUserId()] = id;
-                eachRank[getFieldStarCount()] = starCount;
-                allUserRankInFandom.push(eachRank);
-
-                multi.hget(getUserInfo(id), getFieldSelectedBalloonColor());
-            }
-
-
-            multi.exec(function (err, reply) {
-                if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                    return;
-                }
-
-                var userSelectdBalloonColors = reply;
-
-                for (var i = 1; i < userSelectdBalloonColors.length; i++) {
-                    var eachRank = allUserRankInFandom[i - 1];
-                    eachRank[getFieldSelectedBalloonColor()] = userSelectdBalloonColors[i];
-                    userRankInFandom.push(eachRank);
-                }
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, userRankInFandom);
-
-            });
+            setUserLogining.setUserLogining(res, id, 'allUserRankInFandom', data);
         });
+    });
 });
 
 
@@ -946,7 +935,6 @@ router.post('/allUserRankInFandom', function (req, res) {
  *
  */
 router.post('/userBalloonList', function (req, res) {
-
     consoleInputLog(req.body);
     var id = req.body.id;
 
