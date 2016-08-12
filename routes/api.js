@@ -227,10 +227,9 @@ router.get('/initFandomUserNumber', function (req, res) {
 
             var keys = Object.keys(rowData[key]);
 
-            console.log(rowData[key][keys[5]]);
             var multi = redisClient.multi();
             multi.select(0)
-                .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]])
+                .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]].trim())
                 .exec(function (err) {
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
@@ -264,10 +263,10 @@ router.get('/initBalloonColorList', function (req, res) {
         multi.select(0);
 
         rowData.forEach(function (row, index) {
-            multi.zadd(getBalloonColor(), index, row.color);
+            multi.zadd(getBalloonColor(), index, row.color.trim());
 
             const rgb = row.r + '-' + row.g + '-' + row.b;
-            multi.hset(getBalloonColorRGB(), row.color, rgb);
+            multi.hset(getBalloonColorRGB(), row.color.trim(), rgb);
         });
 
         multi.exec(function (err) {
