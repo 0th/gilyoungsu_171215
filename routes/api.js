@@ -661,6 +661,7 @@ router.post('/login', function (req, res) {
         return;
     }
 
+    redisClient.select(0);
     redisClient.sismember(getUserID(), id, function (err, isExist) {
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
@@ -692,7 +693,7 @@ router.post('/login', function (req, res) {
                     sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                     return;
                 }
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+                setUserLogining.setUserLogining(res, id, 'loginSucceed');
             });
         });
     });
