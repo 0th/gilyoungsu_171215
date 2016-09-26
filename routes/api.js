@@ -655,6 +655,7 @@ router.post('/login', function (req, res) {
 
     const id = req.body.id;
     const uid = req.body.uid;
+
     if (!id || !uid) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
@@ -666,7 +667,7 @@ router.post('/login', function (req, res) {
             return;
         }
 
-        if (!isExist) {
+        if (isExist == 0) {
             sendMessage.sendErrorMessage(res, ERROR_LOGIN_FAIL);
             return;
         }
@@ -703,7 +704,6 @@ router.post('/login', function (req, res) {
  *
  */
 router.post('/loginSucceed', function (req, res) {
-
     consoleInputLog(req.body);
     var id = req.body.id;
     if (!id) {
