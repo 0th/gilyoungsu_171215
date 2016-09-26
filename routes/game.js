@@ -468,7 +468,6 @@ router.post('/gameStart', function (req, res) {
                             const time = moment().format('YYYY.MM.DD HH:mm');
                             userInfo.time = time;
 
-                            console.log(userInfo);
                             setUserLogining.setUserLoginingMatched(res, userId, competitorId, result, userInfo);
                         });
                     });

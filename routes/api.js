@@ -469,15 +469,17 @@ router.get('/initBackground', function (req, res) {
  */
 router.post('/join', function (req, res) {
     consoleInputLog(req.body);
-    var id = req.body.id;
+    const id = req.body.id;
+    const uid = req.body.uid;
 
-    if (!id) {
+    if (!id || !uid) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
     var userInfo = {
         id: id,
+        uid: uid,
         coinCount: 0,
         balloonCount: 0,
         starCount: 0,
@@ -650,45 +652,50 @@ router.post('/joinFandom', function (req, res) {
  */
 router.post('/login', function (req, res) {
     consoleInputLog(req.body);
-    var id = req.body.id;
-    if (!id) {
+
+    const id = req.body.id;
+    const uid = req.body.uid;
+    if (!id || !uid) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
-    var multi = redisClient.multi();
-    multi.select(2)
-        .exists(id)
-        .exec(function (err, reply) {
+    redisClient.sismember(getUserID(), id, function (err, isExist) {
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+            return;
+        }
+
+        if (!isExist) {
+            sendMessage.sendErrorMessage(res, ERROR_LOGIN_FAIL);
+            return;
+        }
+
+        redisClient.select(2);
+        redisClient.exists(id, function (err, reply) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
 
-            var isLogined = reply[1];
+            const isLogined = reply;
+
             if (isLogined) {
                 sendMessage.sendErrorMessage(res, ERROR_LOGINED);
                 return;
-            } else {
-                var multi = redisClient.multi();
-                multi.select(0)
-                    .exists(getUserInfo(id))
-                    .exec(function (err, rep) {
-                        if (err) {
-                            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                            return;
-                        }
-                        var isExisting = rep[1];
-                        if (!isExisting) {
-                            sendMessage.sendErrorMessage(res, ERROR_LOGIN_FAIL);
-                            return;
-                        }
-                        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-                    });
             }
-        });
-});
 
+            redisClient.select(0);
+            redisClient.hset(getUserInfo(id), 'uid', uid, function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+            });
+        });
+    });
+});
 /**
  *
  * 로그인 성공
@@ -975,7 +982,6 @@ router.post('/userInfo', function (req, res) {
     multi.select(0)
         .hgetall(getUserInfo(id))
         .exec(function (err, reply) {
-
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
@@ -1229,7 +1235,9 @@ router.post('/delUser', function (req, res) {
             .srem(getUserID(), id)
             .srem(getCanGameUser(userInfo.fandomName), id)
             .select(1)
-            .del(getUserMatchedList(id));
+            .del(getUserMatchedList(id))
+            .select(2)
+            .del(id);
 
         for (let i = 0; i < GAME_BOARD; i++) {
             multi.del(getUserGameInfo(id, i));
