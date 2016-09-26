@@ -1066,7 +1066,7 @@ router.post('/purchaseSlogan', function (req, res) {
 
 /**
  *
- * 슬로건 색 및 url 변경
+ * 슬로건 문구 및 url 변경
  * @id
  * @url
  * @sloganText
@@ -1074,9 +1074,12 @@ router.post('/purchaseSlogan', function (req, res) {
  */
 router.post('/settingSlogan', function (req, res) {
     consoleInputLog(req.body);
-    const id = req.body.id;
 
-    if (!id) {
+    const id = req.body.id;
+    const sloganText = req.body.text;
+    const url = req.body.url;
+
+    if (!id|| !sloganText || !url) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
@@ -1087,13 +1090,6 @@ router.post('/settingSlogan', function (req, res) {
             sendMessage.sendErrorMessage(res, ERROR_SLOGAN_NOT_PURCAHSE);
             return;
         } else {
-            const sloganText = req.body.selectedSloganText;
-            const url = req.body.selectedSloganUrl;
-
-            if (!sloganText || !url) {
-                sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
-                return;
-            }
             redisClient.select(0);
             redisClient.hmset(getUserInfo(id), 'url', url, 'selectedSloganText', sloganText, function (err) {
                 if (err) {
