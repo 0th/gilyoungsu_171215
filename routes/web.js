@@ -5,6 +5,7 @@ var redisClient = redis.createClient(6388, '192.168.11.3');
 redisClient.select(0);
 
 const _ = require('underscore');
+const Promise = require('bluebird');
 
 const OK = 0;
 const ERROR_DATABASE = 101;
@@ -53,6 +54,31 @@ function sendReply(res, err, reply) {
 }
 
 
+function getUserInfo(userId) {
+    return 'user:' + userId + ":info";
+}
+
+const getFirstUserUid = function (data) {
+    return new Promise(function (resolve, reject) {
+        if (_.isEmpty(data.firstUserId)) {
+            data.firstUser = [];
+            data = _.omit(data, 'firstUserId');
+            resolve(data);
+            return;
+        }
+        redisClient.select(0);
+        redisClient.hget(getUserInfo(data.firstUserId), 'uid', function (err, uid) {
+            if (err) {
+                reject(ERROR_DATABASE);
+            }
+
+            data.firstUser = uid;
+            data = _.omit(data, 'firstUserId')
+            resolve(data);
+        });
+    });
+};
+
 router.get('/', function (req, res) {
     redisClient.zrevrange(getFandomRank(), 0, -1, 'withscores', function (err, allFandomRank) {
         if (err) {
@@ -93,20 +119,19 @@ router.get('/', function (req, res) {
                 const data = fandoms[index];
 
                 data.firstBalloon = reply[index * 3];
-                let firstUserId = reply[(index * 3) + 1];
-
-                if (firstUserId.length != 0) {
-                    const firstUserIds = firstUserId.toString().split(':');
-                    firstUserId = firstUserIds[2];
-                }
-
-                data.firstUser = firstUserId;
+                data.firstUserId = reply[(index * 3) + 1];
                 data.userNum = reply[(index * 3) + 2] == null ? 0 : reply[index * 3 + 2];
 
                 fandomData.push(data);
             });
 
-            sendReply(res, null, {data: fandomData});
+            Promise.mapSeries(fandomData, function (each) {
+                return getFirstUserUid(each);
+            }).then(result => {
+                sendReply(res, null, {data: result});
+            }).catch(function (err) {
+                sendReply(res, err);
+            });
         });
     });
 });
