@@ -5,7 +5,7 @@ var _ = require('underscore');
 const __ = require('lodash');
 var GoogleSpreadsheet = require("google-spreadsheet");
 
-var redisClient = redis.createClient(6388, 'fc-redis');
+var redisClient = redis.createClient(6379, 'fc-redis');
 var router = express.Router();
 
 var gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
