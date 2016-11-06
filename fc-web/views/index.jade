@@ -1,0 +1,123 @@
+extends layout
+
+block content
+    script(src='/javascripts/underscore.js')
+    script(src='/javascripts/searchKeywords.js')
+    script(src='/javascripts/jqueryScrollTo.js')
+    script(src='/javascripts/fandomCafe.js')
+
+
+    script.
+        var selected;
+
+        $.extend($.scrollTo.defaults, {
+            axis: 'y',
+            duration: 800
+        });
+
+        function hrefCafe(eleId) {
+            var url = fandomCafe[eleId];
+            if (url == null || url == '' || url == undefined) {
+                alert('등록된 팬카페가 없습니다.')
+            } else window.open(url);
+
+        }
+
+        function searchFandom() {
+            var word = $('#inputWord').val();
+            var fandom = wordToFandom[word];
+            var obj = $('#' + fandom);
+
+            console.log(obj, word, fandom);
+
+            if (fandom === undefined && obj.length == 0) {
+                alert('해당 검색어에 해당하는 팬덤이 존재하지 않습니다.');
+                return;
+            }
+
+            if (selected != null) {
+                selected.removeClass('tr_select');
+
+            }
+            selected = obj;
+            selected.addClass('tr_select');
+
+            var offset = obj.offset().top;
+            var body = $("html, body");
+
+            body.stop().animate({scrollTop: offset - $(window).height() / 2 + 50},
+                    '1000',
+                    'swing', function () {
+                    });
+
+        }
+    .contents
+        .header
+            .button
+                .item.contact
+                .item.fb
+                .item.about
+            .title.jua 팬덤컵
+                .imgMain
+            .sub_title
+                .imgCup
+                .text.jua 2016년 11월 30일까지 베타기간 입니다.<br> 2017년 1월 1일부터 팬덤컵 대회가 시작됩니다.
+
+            .tag BETA
+
+
+            .input_group
+                input.input#inputWord
+                .button.anim(onclick='searchFandom()' ) 검색
+            .links
+                span.link.fontLight Google Play 다운로드
+                span |
+                span.link.fontLight APP Store 다운로드
+    .contents
+        table
+            tr.border_head
+                th.hidemobile
+                th.rank.text-center 순위
+                th.name.text-center 팬덤
+                th.score.head 점수
+                th.bal.text-center 풍선
+                th.hidemobile
+            -for(var i = 0 ; i < d.data.length ; i ++){ var s = d.data[i];
+            tr.item.anim(id='#{s.fandomName}', onclick='hrefCafe(this.id)')
+                td.hidemobile
+                td.rank.text-center.item #{i + 1}
+                td.name.pad-x
+                    .fandom_name #{s.fandomName}
+                    .fandom_detail.
+                        회원수 : #{s.userNum}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                        빅팬 : #{s.firstUser}
+
+                td.score #{Number(s.score).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                td.bal.item(align='center')
+                    img.ballonImg(id='#{s.firstBalloon[0]}', style='width:15px;height:20px')
+                td.hidemobile
+            -}
+    .contents
+        .footer
+            span.text About
+            span |
+            span.text Contact
+            span |
+            span.text Facebook
+            div.space
+            span Gilvert ⓒ 2016
+
+    script.
+        $('.input').keypress(function (e) {
+            console.log(e);
+            if (e.which == 13) {/* 13 == enter key@ascii */
+                searchFandom();
+            }
+        })
+
+    script(src='/javascripts/fandomBallon.js')
+
+
+
+
+

@@ -1,0 +1,49 @@
+version: '2'
+
+services:
+  fc-redis:
+    restart: always
+    container_name: fc-redis
+    image: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis:/data
+    command: redis-server --appendonly yes
+
+  fc-app:
+    restart: always
+    container_name: fc-app
+    build: ./fc-app/
+    image: gilvert/fc-app
+    ports:
+      - "3000:3000"
+    links:
+      - fc-redis
+    depends_on:
+      - fc-redis
+
+  fc-web:
+    restart: always
+    container_name: fc-web
+    build: ./fc-web/
+    image: gilvert/fc-web
+    ports:
+      - "3001:3000"
+    links:
+      - fc-app
+    depends_on:
+      - fc-app
+
+  nginx:
+    restart: always
+    container_name: nginx
+    build: ./nginx/
+    image: nginx
+    ports:
+      - "80:80"
+    links:
+      - fc-app
+      - fc-web
+    depends_on:
+      - fc-app

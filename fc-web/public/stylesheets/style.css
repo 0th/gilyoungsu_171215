@@ -1,0 +1,379 @@
+.anim {
+    -webkit-transition: all 250ms cubic-bezier(0.250, 0.250, 0.750, 0.750);
+    -moz-transition: all 250ms cubic-bezier(0.250, 0.250, 0.750, 0.750);
+    -o-transition: all 250ms cubic-bezier(0.250, 0.250, 0.750, 0.750);
+    transition: all 250ms cubic-bezier(0.250, 0.250, 0.750, 0.750); /* linear */
+
+    -webkit-transition-timing-function: cubic-bezier(0.250, 0.250, 0.750, 0.750);
+    -moz-transition-timing-function: cubic-bezier(0.250, 0.250, 0.750, 0.750);
+    -o-transition-timing-function: cubic-bezier(0.250, 0.250, 0.750, 0.750);
+    transition-timing-function: cubic-bezier(0.250, 0.250, 0.750, 0.750); /* linear */
+}
+
+body {
+    margin: 0;
+    background-color: #f4f6f6;
+    overflow-x: hidden;
+}
+
+.fontLight {
+    font-weight: 400;
+}
+
+.tag {
+    position: absolute;
+    left: 0;
+    top: 40px;
+    background: #f00;
+    height: 30px;
+    width: 80px;
+    line-height: 28px;
+    font-size: 16px;
+    color: #fff;
+    font-weight: 100;
+    font-family: sans-serif;
+}
+
+@media screen and (max-width: 538px) {
+    .tag {
+        top: -10px;
+    }
+}
+
+* {
+    box-sizing: border-box;
+    font-family: 'NanumBarunGothic', sans-serif;
+    font-weight: 600;
+}
+
+.jua {
+    font-family: 'BM JUA', sans-serif;
+    font-weight: 500;
+}
+
+.contents {
+    position: relative;
+    max-width: 760px;
+    margin: auto;
+    font-family: Apple Gothic, sans-serif;
+    text-align: center;
+}
+
+.button {
+    position: absolute;
+    right: 0;
+    width: 100%;
+    height: 30px;
+    font-size: 11px;
+    color: #aaa;
+    line-height: 25px;
+    top: 15px;
+    padding-right: 10px;
+}
+
+.button > .item {
+    float: right;
+    width: 30px;
+    height: 30px;
+    margin-right: 10px;
+}
+
+.button > .item.about {
+    background: url(/imgs/btn_about_off.png) center;
+    background-size: cover;
+    cursor: pointer;
+
+}
+
+.button > .item.about:hover {
+    background: url(/imgs/btn_about_on.png) center;
+    background-size: cover;
+
+}
+
+.button > .item.contact {
+    background: url(/imgs/btn_contact_off.png) center;
+    background-size: cover;
+    cursor: pointer;
+}
+
+.button > .item.contact:hover {
+    background: url(/imgs/btn_contact_on.png) center;
+    background-size: cover;
+}
+
+.button > .item.fb {
+    background: url(/imgs/btn_facebook_off.png) center;
+    background-size: cover;
+
+}
+
+.button > .item.fb:hover {
+    background: url(/imgs/btn_facebook_on.png) center;
+    background-size: cover;
+    cursor: pointer;
+}
+
+.header {
+    margin-top: 20px;
+    padding-top: 20px;
+    height: 305px;
+    width: 100%;
+    border: 1px solid #dcdcdc;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    background: #f7f7f7;
+}
+
+.footer {
+    height: 110px;
+    margin-bottom: 30px;
+
+    border: 1px solid #dcdcdc;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+    border-top: none;
+    background: #f7f7f7;
+    padding-top: 30px;
+}
+
+.footer > span {
+    color: #bbb;
+    font-size: 12px;
+
+}
+
+.footer > .space {
+    height: 20px;
+}
+
+.footer > span.text {
+    margin: 0 7px;
+}
+
+.title {
+    padding-top: 40px;
+    font-size: 70px;
+    font-weight: 500;
+    position: relative;
+    pointer-events: none;
+}
+
+.imgMain {
+    width: 80px;
+    height: 110px;
+    position: absolute;
+    left: calc(50% - 160px);
+    bottom: 10px;
+    background: url('/imgs/img_title2.png') no-repeat right bottom;
+    background-size: contain;
+}
+
+.sub_title {
+    padding-top: 5px;
+    width: 320px;
+    margin: auto;
+    position: relative;
+}
+
+.sub_title > .text {
+
+    height: 100%;
+    margin: auto;
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 400;
+}
+
+.sub_title > .imgCup {
+    position: absolute;
+    width: 20px;
+    left: 20px;
+    height: 100%;
+    background: url("/imgs/img_cup.png") no-repeat center 0;
+    background-size: contain;
+    text-align: right;
+}
+
+.input_group {
+    padding-top: 30px;
+    position: relative;
+    max-width: 430px;
+    width: 100%;
+    margin: auto;
+
+}
+
+@media screen and (max-width: 538px) {
+    .hidemobile {
+        display: none;
+    }
+
+    .input_group {
+        max-width: 280px;
+    }
+}
+
+.input_group > .input {
+    position: absolute;
+    top: 30px;
+    left: 0;
+    width: calc(100% - 80px);
+    height: 35px;
+}
+
+input {
+    padding-left: 10px;
+    border: solid 1px #dadada;
+    border-right: none;
+    border-radius: 3px 0 0 3px;
+    appearance: button;
+    -moz-appearance: button; /* Firefox */
+    -webkit-appearance: button; /* Safari and Chrome */
+
+}
+
+.input_group > .button {
+    position: absolute;
+    right: 0px;
+    top: 30px;
+    height: 35px;
+    border: solid 1px #ccc;
+    border-left: 0;
+    border-radius: 0 3px 3px 0;
+    background: #fedc19;
+    color: #fff;
+    font-size: 13px;
+    line-height: 33px;
+    width: 80px;
+}
+
+.input_group > .button:hover {
+
+    cursor: pointer;
+    background: #ff9200;
+}
+
+.links {
+    position: absolute;
+    width: 100%;
+    margin-top: 60px;
+    font-size: 14px;
+    color: #0099dd;
+}
+
+.links > .link {
+    padding: 0 10px;
+}
+
+.links > .link:hover {
+    cursor: pointer;
+    padding: 0 10px;
+}
+
+table {
+    border: solid 1px #dedede;
+    border-top: none;
+    background: #fff;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th {
+    min-width: 50px;
+    color: #bbb;
+    font-size: 12px;
+    height: 45px;
+}
+
+tr {
+    font-weight: 900;
+
+    border-bottom: solid 1px #eee !important;
+
+}
+
+tr.item:hover {
+    background: #f0f0f0;
+
+}
+
+.tr_select {
+    background: #fedc19 !important;
+}
+
+td {
+    padding-top: 22px !important;
+    padding-bottom: 15px !important;
+    min-width: 50px;
+
+    color: #363636;
+}
+
+.rank {
+    width: 5%;
+}
+
+.rank.item {
+    padding-bottom: 15px !important;
+    font-size: 18px;
+    line-height: 18px;
+    color: #666;
+}
+
+.name {
+    width: 50%;
+    text-align: left;
+}
+
+.fandom_name {
+    font-size: 16px;
+    height: 16px;
+    line-height: 16px;
+    color: #666;
+}
+
+.fandom_detail {
+    padding-top: 10px;
+    font-size: 12px;
+    line-height: 12px;
+    font-weight: 500;
+    color: #888;
+
+}
+
+.score {
+    width: 20%;
+    text-align: right;
+    padding-right: 20px;
+}
+
+.score.head {
+    padding-right: 30px;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.bal {
+    width: 5%;
+    text-align: center;
+}
+
+.bal.item {
+    font-size: 5px;
+}
+
+.pad-x {
+    padding: 0 30px;
+}
+
+.spacing {
+
+}
+
+td {
+
+}
+
