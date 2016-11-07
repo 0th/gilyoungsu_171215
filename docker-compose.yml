@@ -47,3 +47,4 @@ services:
       - fc-web
     depends_on:
       - fc-app
+      - fc-web
