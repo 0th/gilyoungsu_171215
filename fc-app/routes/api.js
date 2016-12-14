@@ -204,6 +204,268 @@ function getFieldSelectedBalloonShape() {
 }
 
 
+
+
+
+//-------------------* Gilvert *-------------------//
+
+//[추가1] purchaseItemWithCoin'
+// 상품 : 팬덤 코인 사용
+// @id @item @coin
+
+function getFieldCoinCount() {
+    return 'coinCount';
+}
+
+
+router.post('/purchaseItemWithCoin', function (req, res) {
+
+    consoleInputLog(req.body);
+
+    var id = req.body.id;
+    var coin = req.body.coin;
+    var item = req.body.item;
+    var slogan = "슬로건";
+    var multi = redisClient.multi();
+
+    if (!id || !item || !coin) {
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+    if(item == slogan  ){
+
+        multi.select(0)
+            .hset(getUserInfo(id), getFieldHasSlogan(), 1)
+            .hset(getUserInfo(id), getFieldCoinCount(), coin)
+            .exec(function (err) {
+
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+                setUserLogining.setUserLogining(res, id, 'succeed');
+            });
+    }else{
+
+        multi.select(0)
+            .sadd(getUserBalloonList(id), item)
+            .hset(getUserInfo(id), getFieldCoinCount(), coin)
+            .exec(function (err) {
+
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+                setUserLogining.setUserLogining(res, id, 'succeed');
+            });
+    }
+});
+
+// [추가2] 공지사항 업데이트
+
+var noticeUpdateSheet = new GoogleSpreadSheet('1a_HkK-e4t6hCG8mmIp-JJEtsuPTeTF0VXX1pqFQMcTU');
+
+
+function getNotice() {
+    return 'notice:normal';
+}
+
+function getNoticeUpdate() {
+    return 'notice:update';
+}
+
+// initNoticeUpate
+router.get('/initNoticeUpdate', function (req, res) {
+    noticeUpdateSheet.getRows(1, function (err, rowData) {
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
+            return;
+        }
+        const data = rowData[0];
+        redisClient.select(0);
+        redisClient.hset(getNoticeUpdate(), data.ver, data.notice, function (err) {
+
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                return;
+            }
+            sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+        });
+    });
+});
+
+
+
+//getNoticeUpdate
+router.get('/getNoticeUpdate', function (req, res) {
+    redisClient.select(0);
+    redisClient.hgetall(getNoticeUpdate(), function (err, reply) {
+
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+            return;
+        }
+
+        const  noticeList = [];
+        const notices = _.keys(reply);
+
+        _.each(notices, function (notices_index) {
+            const info = notices_index+":"+reply[notices_index];
+            noticeList.push(info);
+        });
+
+        var lastNum = noticeList.length-1;
+        var send_notice = noticeList[lastNum];
+        //var send_notice = JSON.stringify(noticeList[lastNum]);
+
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, send_notice);
+    });
+});
+
+
+
+//[추가3] 스타명 가져오기
+function getFandomStar() {
+    return 'fandomStar';
+}
+
+function getStar(fandom) {
+    return 'Star';
+}
+
+
+//initFandomStar'
+router.get('/initFandomStar', function (req, res) {
+    fandomListSheet.getRows(1, function (err, rowData) {
+
+
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
+            return;
+        }
+
+
+        var rowKeys = Object.keys(rowData);
+        var temp_list = [];
+
+
+        rowKeys.forEach(function (key) {
+
+
+            var keys = Object.keys(rowData[key]);
+            var multi = redisClient.multi();
+
+
+            multi.select(0)
+                .hset(getFandomStar(),rowData[key][keys[5]], rowData[key][keys[4]])
+                .hgetall(getFandomStar())
+                .exec(function (err) {
+                    if (err) {
+                        sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                        return;
+                    }
+
+                });
+        });
+
+        sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
+    });
+});
+
+
+//fandomBaseInfo01
+router.get('/fandomBaseInfo01', function (req, res) {
+
+
+    var datas = [];
+    var fandomBaseInfos = [];
+    var multi = redisClient.multi();
+    var starlist = [];
+
+
+    multi.select(0)//
+        .zrevrange(getFandomRank(), 0, -1, 'withscores')
+        .exec(function (err, rep) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                return;
+            }
+
+
+            var fandomRankList = rep[1];
+            var multi = redisClient.multi();
+            multi.select(0);
+
+
+            for (var i = 0; i < fandomRankList.length; i = i + 2) {
+
+
+                if (fandomRankList[i] != getFieldGamingNow()) { //GAMING_NOW
+
+
+                    var fandomBaseData = {};
+                    fandomBaseData[getFieldFandomName()] = fandomRankList[i];
+                    fandomBaseData[getFieldScore()] = fandomRankList[i + 1];
+                    datas.push(fandomBaseData);
+
+
+                    multi.zscore(getFandomUserNumber(), fandomRankList[i])
+                        .zrevrange(getFandomBalloonRank(fandomRankList[i]), 0, 0)
+                        .hget(getFandomStar(), fandomRankList[i]);
+
+                }
+            }
+
+            multi.exec(function (err, reply) {
+
+
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+
+                for (var i = 0; i < datas.length; i++) {
+
+
+                    var fandomBaseData = datas[i];
+                    var i01 = 3*i + 1;
+                    var i02 = i01 + 1;
+                    var i03 = i01 + 2;
+
+                    fandomBaseData[getFieldUserNumber()] = reply[i01];
+                    var firstBalloon = reply[i02];
+                    fandomBaseData[getFieldBalloonFirstColor()] = firstBalloon[0];
+                    var star = "star";
+                    fandomBaseData[star] = reply[i03];
+                    fandomBaseInfos.push(fandomBaseData);
+
+                }
+
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, fandomBaseInfos);
+
+            });
+        });
+});
+
+
+
+//--------------------------------------------------//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /**
  *
  *  팬덤리스트 초기화
@@ -221,9 +483,13 @@ router.get('/initFandomUserNumber', function (req, res) {
         var rowKeys = Object.keys(rowData);
 
         rowKeys.forEach(function (key) {
+
+            /*
             if (key == 0) {
                 return;
             }
+            */
+
 
             var keys = Object.keys(rowData[key]);
 
