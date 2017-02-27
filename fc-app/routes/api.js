@@ -1,19 +1,34 @@
 var express = require('express');
 var redis = require('redis');
+var moment = require('moment');
+
+
 var redisClient = redis.createClient(6379, 'fc-redis');
+//var redisClient = redis.createClient(6379, '127.0.0.1');
+
+
 var router = express.Router();
 var _ = require('underscore');
 const fs = require('fs');
 
+
+
 var GoogleSpreadSheet = require("google-spreadsheet");
+
 var fandomListSheet = new GoogleSpreadSheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjBQZuYqH5vQ');
 var balloonColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
 var balloonShopListSheet = new GoogleSpreadSheet('1eu3ufiAguhojmI0dSkSG0bySoNdwNezzbrxJawsE7ho');
 var noticeSheet = new GoogleSpreadSheet('1fSC13hjAqYxjr9mFDoDSf7ZvkpOl2dUiOid7bqf2Ft4');
 var backgroundSheet = new GoogleSpreadSheet('1_AT0C1__Dt67lR4IiBYQxuGrCKUikR_kCy4b2lU05WQ');
+var fdcValueSheet = new GoogleSpreadSheet('1T1ng3UyTx20JAyZigDihk1YATyrED9aC9ioZOcoG-Lk');
 var logger = require('../functions/logger');
 
+
+
+
 const LOGIN_VALID_TIME = 60;
+const LOGOUT_DELAY_TIME = 40;
+const LOGOUT_TIME = 1;
 const GAME_BOARD = 36;
 
 const ERROR_SHEET = 101;
@@ -49,6 +64,11 @@ message[ERROR_SLOGAN_NOT_PURCAHSE] = "슬로건을 구입하지 않은 사용자
 message[ERROR_LOGINED] = "이미 로그인 되어있는 사용자 입니다";
 message[ERROR_NOT_EXIST_USER] = "유저가 존재하지 않습니다";
 
+
+
+
+
+
 function addMethod(object, functionName, func) {
     var overloadingFunction = object[functionName];
     object[functionName] = function () {
@@ -81,37 +101,29 @@ function SendMessage() {
     });
 }
 
+
+
 var sendMessage = new SendMessage();
 
+
 function SetUserLogining() {
+
+
     addMethod(this, "setUserLogining", function (res, userId, protocol) {
-        var multi = redisClient.multi();
-        multi.select(2)
-            .sadd(userId, protocol)
-            .expire(userId, LOGIN_VALID_TIME)
-            .exec(function (err) {
-                if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                    return;
-                }
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
-            });
+
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE);
+
+
     });
 
     addMethod(this, "setUserLogining", function (res, userId, protocol, sendData) {
-        var multi = redisClient.multi();
-        multi.select(2)
-            .sadd(userId, protocol)
-            .expire(userId, LOGIN_VALID_TIME)
-            .exec(function (err) {
-                if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                    return;
-                }
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, sendData);
-            });
+
+
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, sendData);
+
     });
 }
+
 
 var setUserLogining = new SetUserLogining();
 
@@ -207,20 +219,428 @@ function getFieldSelectedBalloonShape() {
 
 
 
-//-------------------* Gilvert *-------------------//
 
-//[추가1] purchaseItemWithCoin'
-// 상품 : 팬덤 코인 사용
-// @id @item @coin
+
+///////////////////////// GILVERT /////////////////////////
+
+
+
+
+//------------------------* 공통 *------------------------//
+
+
+
+var noticeUpdateSheet = new GoogleSpreadSheet('1a_HkK-e4t6hCG8mmIp-JJEtsuPTeTF0VXX1pqFQMcTU');
+
+
+function getNotice() {
+    return 'notice:normal';
+}
+
+function getNoticeUpdate() {
+    return 'notice:update';
+}
+
+function  current_time() {
+    var time;
+    time = moment().format('YYYY.MM.DD HH:mm');
+    return time;
+}
+
+function initGameValue() {
+    return 'gameValue';
+}
+
+function userStatus(userid) {
+    return 'status:'+ userid;
+}
 
 function getFieldCoinCount() {
     return 'coinCount';
 }
 
+function getFandomStar() {
+    return 'fandomStar';
+}
+
+function getStar(fandom) {
+    return 'Star';
+}
+
+
+
+
+//-------------------* UPDATE_170222 *-------------------//
+
+
+
+/*
+
+ 1. delTrashUser
+ - 10시간 이상 잔존하는 로그인 사용자 삭제
+
+ */
+
+
+
+router.get('/delTrashUser', function (req,res) {
+
+
+
+    const multi = redisClient.multi();
+    var star = '*';
+
+    multi.select(3)
+        .keys(star)
+        .exec(function (err, keys) {
+
+            if (err) {
+                console.log(err);
+                return;
+            }
+
+
+            var keys_id = keys[1];
+            var rec_reply;
+
+
+            consoleInputLog("keys_id: "+keys_id);
+
+
+            _.each(keys_id, function (id) {
+
+
+                var count =0;
+
+
+                multi.get(id)
+                    .exec(function (err, reply) {
+
+
+                        if(err){
+                            sendMessage.sendErrorMessage(res, err);
+                        }
+
+                        rec_reply =JSON.parse(reply[count]);
+
+
+
+                        if(rec_reply[0]=='login') {
+
+                            const pre_time = rec_reply[1];
+                            const current_time = moment().format('YYYY.MM.DD HH:mm');
+                            var old = new Date(pre_time);
+                            var now = new Date(current_time);
+
+                            var old_time = old.getTime();
+                            var now_time = now.getTime();
+                            var REDUNCY_TIME = 360 * 10000 * 5 * 2; // 10시간
+
+
+                            if (now_time - old_time > REDUNCY_TIME) {
+
+                                consoleInputLog(" keys_id: "+keys_id[count]);
+                                redisClient.del(keys_id[count]);
+
+                            }
+
+                        }
+
+                        ++count;
+                    });
+
+
+
+            });
+
+            sendMessage.sendSucceedMessage(res,'succeed');
+
+
+        });
+
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//-------------------* UPDATE_170213 *-------------------//
+
+
+/*
+ 1. statusCompetitor
+ - @competitorId
+ - select(3) 상대방 존재 여부 판단
+ - 존재하면 대전 불가능 존재하지 않으면 대전 가능
+ */
+
+router.post('/statusCompetitor', function (req,res) {
+
+
+    var competitorId;
+    var multi;
+
+    competitorId = req.body.competitorId;
+    multi = redisClient.multi();
+
+    multi.select(3)
+        .get(userStatus(competitorId))
+        .exec(function (err, reply) {
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
+            var temp = reply[1];
+            var temp_obj = JSON.parse(temp);
+            var temp_string;
+
+
+            if (_.isEmpty(temp_obj)) {
+                sendMessage.sendSucceedMessage(res, 'yes');
+                // 대전가능
+            }else{
+                sendMessage.sendSucceedMessage(res,'no');
+                // 대전불가능
+            }
+
+        });
+
+});
+
+
+
+
+
+//-------------------* UPDATE_170125 *-------------------//
+
+/*
+ 1. initGameValue
+ - 게임 데이터 기본값 초기화
+ 2. getGameValue
+ - 게임 데이터 값 가져오기
+ */
+
+
+
+router.get('/initGameValue', function (req, res) {
+    fdcValueSheet.getRows(1, function (err, rowData) {
+
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
+            return;
+        }
+
+
+        var keys;
+        var rowKeys;
+        var multi;
+
+        rowKeys = Object.keys(rowData);
+        multi = redisClient.multi();
+
+        rowKeys.forEach(function (key) {
+
+            keys = Object.keys(rowData[key]);
+
+            multi.select(1)
+                .hset(initGameValue(),rowData[key][keys[5]], rowData[key][keys[6]])
+                .exec(function (err) {
+                    if (err) {
+                        sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                        return;
+                    }
+                });
+        });
+
+        sendMessage.sendSucceedMessage(res, 'init_GameValue');
+
+    });
+});
+
+
+router.get('/getGameValue', function (req, res) {
+
+    redisClient.select(1);
+    redisClient.hgetall(initGameValue(), function (err, reply) {
+
+        if (err) {
+            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+            return;
+        }
+
+        const keys = _.keys(reply);
+        const  list = {};
+
+        _.each(keys, function (key) {
+            list[key] = reply[key];
+        });
+
+        sendMessage.sendSucceedMessage(res, list);
+
+    });
+});
+
+
+
+
+//-------------------* UPDATE_170120 *-------------------//
+
+/*
+
+ 1. startPause
+ - @id
+ - select(3) 사용자 삭제
+ 2. startResume
+ - @id
+ - 사용자가 없으면 로그아웃 처리
+ - 사용자가 있고 플레이 상태이면 플레이 상태 유지
+ - 사용자가 있고 로그인 상태이면 현재시간과 함께 로그인 기록
+ 3. startExit
+ - select(3) 사용자 삭제
+ - 1번과 중복?
+
+ */
+
+
+router.post('/startPause', function (req,res) {
+
+    var id;
+    var multi;
+
+    id = req.body.id;
+    multi = redisClient.multi();
+
+    multi.select(3)
+        .del(userStatus(id))
+        .exec(function (err) {
+
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                return;
+            }
+            sendMessage.sendSucceedMessage(res, 'user: logout');
+        });
+});
+
+
+router.post('/startResume', function (req,res) {
+
+    var id;
+    var multi;
+
+    multi = redisClient.multi();
+    id = req.body.id;
+
+
+    multi.select(3)
+        .get(userStatus(id))
+        .exec(function (err, reply) {
+
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                return;
+            }
+
+            var temp = [];
+            var status;
+            temp = JSON.parse(reply[1]);
+
+
+            if(temp ==null){
+                status = 'logout';
+            }else{
+                status = temp[0];
+            }
+
+
+            if(status == "playing"){
+                sendMessage.sendSucceedMessage(res,'user:playing');
+                return;
+            }else{
+
+                const statusInfo = [];
+                statusInfo.push("login");
+                statusInfo.push(current_time());
+                var info = JSON.stringify(statusInfo);
+
+                multi.select(3)
+                    .set(userStatus(id), info)
+                    .exec(function (err) {
+                        if(err){
+                            sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                            return;
+                        }
+                        sendMessage.sendSucceedMessage(res,'user:login');
+                    });
+            }
+        });
+});
+
+
+router.post('/startExit', function (req,res) {
+
+
+    var id;
+    var multi;
+
+    id = req.body.id;
+    multi = redisClient.multi();
+
+    multi.select(3)
+        .del(userStatus(id))
+        .exec(function (err) {
+
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                return;
+            }
+            sendMessage.sendSucceedMessage(res, 'user: logout');
+        });
+});
+
+
+
+//-------------------* 161210 *-------------------//
+
+
+/*
+ 1. purchaseItemWithCoin
+ - @id, @coin, @item
+ - 코인으로 아이템 구매
+ 2. initNoticeUpate
+ - 공지사항 업데이트
+ 3. getNoticeUpdate
+ - 업데이트 공지사항 받기
+ 4. initFandomStar
+ - 스타명 초기화
+ 5. fandomBaseInfo01
+ - 기본정보에 스타명 추가
+ */
+
+
 
 router.post('/purchaseItemWithCoin', function (req, res) {
 
-    consoleInputLog(req.body);
 
     var id = req.body.id;
     var coin = req.body.coin;
@@ -262,20 +682,7 @@ router.post('/purchaseItemWithCoin', function (req, res) {
     }
 });
 
-// [추가2] 공지사항 업데이트
 
-var noticeUpdateSheet = new GoogleSpreadSheet('1a_HkK-e4t6hCG8mmIp-JJEtsuPTeTF0VXX1pqFQMcTU');
-
-
-function getNotice() {
-    return 'notice:normal';
-}
-
-function getNoticeUpdate() {
-    return 'notice:update';
-}
-
-// initNoticeUpate
 router.get('/initNoticeUpdate', function (req, res) {
     noticeUpdateSheet.getRows(1, function (err, rowData) {
         if (err) {
@@ -296,8 +703,6 @@ router.get('/initNoticeUpdate', function (req, res) {
 });
 
 
-
-//getNoticeUpdate
 router.get('/getNoticeUpdate', function (req, res) {
     redisClient.select(0);
     redisClient.hgetall(getNoticeUpdate(), function (err, reply) {
@@ -317,25 +722,12 @@ router.get('/getNoticeUpdate', function (req, res) {
 
         var lastNum = noticeList.length-1;
         var send_notice = noticeList[lastNum];
-        //var send_notice = JSON.stringify(noticeList[lastNum]);
 
         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, send_notice);
     });
 });
 
 
-
-//[추가3] 스타명 가져오기
-function getFandomStar() {
-    return 'fandomStar';
-}
-
-function getStar(fandom) {
-    return 'Star';
-}
-
-
-//initFandomStar'
 router.get('/initFandomStar', function (req, res) {
     fandomListSheet.getRows(1, function (err, rowData) {
 
@@ -359,7 +751,6 @@ router.get('/initFandomStar', function (req, res) {
 
             multi.select(0)
                 .hset(getFandomStar(),rowData[key][keys[5]], rowData[key][keys[4]])
-                .hgetall(getFandomStar())
                 .exec(function (err) {
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
@@ -374,7 +765,6 @@ router.get('/initFandomStar', function (req, res) {
 });
 
 
-//fandomBaseInfo01
 router.get('/fandomBaseInfo01', function (req, res) {
 
 
@@ -450,29 +840,57 @@ router.get('/fandomBaseInfo01', function (req, res) {
 
 
 
-//--------------------------------------------------//
+
+///////////////////////// 윤태린 /////////////////////////
+
+
+const getBalloonColorRGB = function () {
+    return 'color:balloon:rgb'
+};
+
+
+function getNotice() {
+    return 'notice';
+}
+
+function getBackground() {
+    return 'color:background';
+}
+
+function getCanGameUser(fandomName) {
+    return 'canGameUser:' + fandomName;
+}
+
+
+function getUserMatchedList(userId) {
+    return 'user:' + userId + ":matched";
+}
 
 
 
+/*
 
+ 1. initFandomUserNumber
+ - 팬덤리스트 초기화
+ 2. initBalloonColorList
+ - 풍선 컬러 디비초기화
+ 3. initShopBalloon
+ - 상점 풍선모양 및 가격 초기화
+ 4. initFandomBalloonRank
+ - 팬덤별 풍선 랭크 초기화
 
+ 5. initFandomRank
+ - 전체 팬덤 점수 랭킹 초기화
+ 6. initNotice
+ - 공지사항 초기화
+ 7. initBackground
+ - 배경화면 색상 초기화
 
-
-
-
-
-
-
-
-
-
-/**
- *
- *  팬덤리스트 초기화
- *
- *  (첫 팬덤 가입화면에서 회원 수를 알려주기위해서)
- *
  */
+
+
+
+
 router.get('/initFandomUserNumber', function (req, res) {
     fandomListSheet.getRows(1, function (err, rowData) {
         if (err) {
@@ -483,12 +901,6 @@ router.get('/initFandomUserNumber', function (req, res) {
         var rowKeys = Object.keys(rowData);
 
         rowKeys.forEach(function (key) {
-
-            /*
-            if (key == 0) {
-                return;
-            }
-            */
 
 
             var keys = Object.keys(rowData[key]);
@@ -508,15 +920,7 @@ router.get('/initFandomUserNumber', function (req, res) {
     });
 });
 
-const getBalloonColorRGB = function () {
-    return 'color:balloon:rgb'
-};
 
-/**
- *
- * 풍선 컬러 디비초기화
- *
- */
 router.get('/initBalloonColorList', function (req, res) {
     const balloonColorSheetNum = 1;
     balloonColorListSheet.getRows(balloonColorSheetNum, function (err, rowData) {
@@ -547,9 +951,6 @@ router.get('/initBalloonColorList', function (req, res) {
 });
 
 
-/**
- * 상점 풍선모양 및 가격 초기화
- */
 router.get('/initShopBalloon', function (req, res) {
     const balloonItemSheet = 1;
     balloonShopListSheet.getRows(balloonItemSheet, function (err, rowData) {
@@ -584,11 +985,6 @@ router.get('/initShopBalloon', function (req, res) {
 });
 
 
-/**
- *
- * 팬덤별 풍선 랭크 초기화
- *
- */
 router.get('/initFandomBalloonRank', function (req, res) {
     var multi = redisClient.multi();
     multi.select(0)
@@ -623,11 +1019,8 @@ router.get('/initFandomBalloonRank', function (req, res) {
 });
 
 
-/**
- *
- * 전체 팬덤 점수 랭킹 초기화
- *
- */
+
+
 router.get('/initFandomRank', function (req, res) {
     var multi = redisClient.multi();
     multi.select(0)
@@ -659,18 +1052,6 @@ router.get('/initFandomRank', function (req, res) {
 });
 
 
-/**
- *
- * 공지사항 초기화
- *
- */
-function getNotice() {
-    return 'notice';
-}
-
-function getBackground() {
-    return 'color:background';
-}
 router.get('/initNotice', function (req, res) {
     noticeSheet.getRows(1, function (err, rowData) {
         if (err) {
@@ -691,9 +1072,6 @@ router.get('/initNotice', function (req, res) {
 });
 
 
-/**
- * 배경화면 색상 초기화
- */
 router.get('/initBackground', function (req, res) {
     backgroundSheet.getRows(1, function (err, row) {
         if (err) {
@@ -721,20 +1099,45 @@ router.get('/initBackground', function (req, res) {
 });
 
 
+
+
+
 /*--------------------------------- 초기화 ---------------------------------*/
 
 
-/**
- *
- * 회원가입
- * @id : 사용자 아이디
- *
- * TODO
- * 추후 이 아이디는 사용자 고유의 key값이 될 것
- *
+
+
+/*
+
+ 1. join
+ - @id
+ - 회원가입
+ - 추후 이 아이디는 사용자 고유의 key값이 될 것
+ 2. fandomUserNumberRank
+ - 팬덤 회원수 정렬 리스트 요청
+ 3. joinFandom
+ - @id, @fandomName, @selectedBalloon
+ - 팬덤가입
+ 4. login
+ - @id
+ - 로그인 구현
+
+
+ 5. loginSucceed
+ - @id
+ - 로그인 성공
+ 6. fandomFirstBalloon
+ - @fandomName
+ - 팬덤별 풍선 랭킹 1위 요청
+ 7. fandomBaseInfo
+ - 로그인시 팬덤 기본정보 요청
+ 8. balloonColorList
+ - 풍선 컬러 리스트 요청
+
  */
+
+
 router.post('/join', function (req, res) {
-    consoleInputLog(req.body);
     const id = req.body.id;
     const uid = req.body.uid;
 
@@ -759,6 +1162,7 @@ router.post('/join', function (req, res) {
         background: "bg_color_04",
         level: 1
     };
+
 
     var multi = redisClient.multi();
     multi.select(0)
@@ -804,11 +1208,6 @@ router.post('/join', function (req, res) {
 });
 
 
-/**
- *
- * 팬덤 회원수 정렬 리스트 요청
- *
- */
 router.get('/fandomUserNumberRank', function (req, res) {
     var multi = redisClient.multi();
     multi.select(0)
@@ -831,18 +1230,7 @@ router.get('/fandomUserNumberRank', function (req, res) {
 });
 
 
-/**
- *  팬덤가입
- *  @id
- *  @fandomName
- *  @selectedBalloon
- */
-function getCanGameUser(fandomName) {
-    return 'canGameUser:' + fandomName;
-}
-
 router.post('/joinFandom', function (req, res) {
-    consoleInputLog(req.body);
 
     var id = req.body.id;
     var fandomName = req.body.fandomName;
@@ -910,25 +1298,22 @@ router.post('/joinFandom', function (req, res) {
 });
 
 
-/**
- *
- * 로그인 구현
- * @id
- *
- */
 router.post('/login', function (req, res) {
-    consoleInputLog(req.body);
+
 
     const id = req.body.id;
     const uid = req.body.uid;
+
 
     if (!id || !uid) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
+
     redisClient.select(0);
     redisClient.sismember(getUserID(), id, function (err, isExist) {
+
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
             return;
@@ -939,39 +1324,26 @@ router.post('/login', function (req, res) {
             return;
         }
 
-        redisClient.select(2);
-        redisClient.exists(id, function (err, reply) {
+
+        redisClient.select(0);
+        redisClient.hset(getUserInfo(id), 'uid', uid, function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
-
-            const isLogined = reply;
-
-            if (isLogined) {
-                sendMessage.sendErrorMessage(res, ERROR_LOGINED);
-                return;
-            }
-
-            redisClient.select(0);
-            redisClient.hset(getUserInfo(id), 'uid', uid, function (err) {
-                if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                    return;
-                }
-                setUserLogining.setUserLogining(res, id, 'loginSucceed');
-            });
+            setUserLogining.setUserLogining(res, id, 'loginSucceed');
         });
+
+
+
     });
 });
-/**
- *
- * 로그인 성공
- *  @id
- *
- */
+
+
+
+
+
 router.post('/loginSucceed', function (req, res) {
-    consoleInputLog(req.body);
     var id = req.body.id;
     if (!id) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
@@ -981,15 +1353,8 @@ router.post('/loginSucceed', function (req, res) {
 });
 
 
-/**
- *
- *  팬덤별 풍선 랭킹 1위 요청
- *  @fandomName
- *
- */
 router.post('/fandomFirstBalloon', function (req, res) {
 
-    consoleInputLog(req.body);
     var fandomName = req.body.fandomName;
     if (!fandomName) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
@@ -1012,12 +1377,8 @@ router.post('/fandomFirstBalloon', function (req, res) {
 });
 
 
-/**
- *
- * 로그인시 팬덤 기본정보 요청
- *
- */
 router.get('/fandomBaseInfo', function (req, res) {
+
     var datas = [];
     var fandomBaseInfos = [];
     var multi = redisClient.multi();
@@ -1072,11 +1433,6 @@ router.get('/fandomBaseInfo', function (req, res) {
 });
 
 
-/**
- *
- * 풍선 컬러 리스트 요청
- *
- */
 router.get('/balloonColorList', function (req, res) {
     redisClient.select(0);
     redisClient.zrange(getBalloonColor(), 0, -1, function (err, balloons) {
@@ -1090,11 +1446,40 @@ router.get('/balloonColorList', function (req, res) {
 });
 
 
-/**
- *
- * 상점 풍선 모양 및 슬로건 가격 리스트 요청
- *
+
+
+
+/*
+
+ 1. shopList
+ - 상점 풍선 모양 및 슬로건 가격 리스트 요청
+ 2. fandomRankList
+ - 전체 팬덤 점수 랭킹 리스트 요청
+ 3. allUserRankInFandom
+ - @fandomName
+ - 전체 팬덤 내 유저 랭킹 리스트 요청
+ 4. userBalloonList
+ - @id
+ - 유저가 보유한 풍선리스트 요청
+
+
+ 5. userInfo
+ - @id
+ - 유저 정보 요청
+ 6. main
+ - @id
+ - 메인화면(대기화면) 게임정보 요청
+ 7. purchaseSlogan
+ - @id
+ - 슬로건 구매
+ 8. settingSlogan
+ - @id, @url, @sloganText
+ - 슬로건 문구 및 url 변경
+
  */
+
+
+
 router.get('/shopList', function (req, res) {
     var multi = redisClient.multi();
     multi.select(0)
@@ -1107,16 +1492,12 @@ router.get('/shopList', function (req, res) {
             }
 
             var shopBalloonList = rep[1];
-
             sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, shopBalloonList);
 
         });
 });
 
 
-/**
- * 전체 팬덤 점수 랭킹 리스트 요청
- */
 router.get('/fandomRankList', function (req, res) {
     var multi = redisClient.multi();
     multi.select(0)
@@ -1138,24 +1519,23 @@ router.get('/fandomRankList', function (req, res) {
 });
 
 
-/**
- *
- *  전체 팬덤 내 유저 랭킹 리스트 요청
- *  @fandomName
- *
- */
 router.post('/allUserRankInFandom', function (req, res) {
-    consoleInputLog(req.body);
+
+
     var fandomName = req.body.fandomName;
     const id = req.body.id;
+
 
     if (!fandomName || !id) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
+
     redisClient.select(0);
     redisClient.zrevrange(getUserRank(fandomName), 0, -1, 'withscores', function (err, ranks) {
+
+
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
             return;
@@ -1166,9 +1546,10 @@ router.post('/allUserRankInFandom', function (req, res) {
             return;
         }
 
+
         const rankInfo = [];
 
-        for (let i = 0; i < ranks.length; i = i + 2) {
+        for (var i = 0; i < ranks.length; i = i + 2) {
             const userInfo = {
                 id: ranks[i],
                 starCount: ranks[i + 1],
@@ -1181,10 +1562,11 @@ router.post('/allUserRankInFandom', function (req, res) {
         const multi = redisClient.multi();
         multi.select(0);
 
-        for (let info of rankInfo)
+        for (var info of rankInfo)
             multi.hgetall(getUserInfo(info.id));
 
         multi.exec(function (err, userInfo) {
+
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
@@ -1192,7 +1574,7 @@ router.post('/allUserRankInFandom', function (req, res) {
 
             const data = [];
 
-            for (let i = 0; i < userInfo.length - 1; i++)
+            for (var i = 0; i < userInfo.length - 1; i++)
                 data.push(_.extend(rankInfo[i], userInfo[i + 1]));
 
             setUserLogining.setUserLogining(res, id, 'allUserRankInFandom', data);
@@ -1201,14 +1583,8 @@ router.post('/allUserRankInFandom', function (req, res) {
 });
 
 
-/**
- *
- * 유저가 보유한 풍선리스트 요청
- * @id
- *
- */
 router.post('/userBalloonList', function (req, res) {
-    consoleInputLog(req.body);
+
     var id = req.body.id;
 
     if (!id) {
@@ -1231,13 +1607,11 @@ router.post('/userBalloonList', function (req, res) {
         });
 });
 
-/**
- *
- * 유저 정보 요청
- * @id
- *
- */
+
+
+
 router.post('/userInfo', function (req, res) {
+
     var id = req.body.id;
 
     if (!id) {
@@ -1261,15 +1635,8 @@ router.post('/userInfo', function (req, res) {
 });
 
 
-/**
- *
- * 메인화면(대기화면) 게임정보 요청
- * @id
- *
- */
 router.post('/main', function (req, res) {
 
-    consoleInputLog(req.body);
     var id = req.body.id;
 
     if (!id) {
@@ -1300,15 +1667,9 @@ router.post('/main', function (req, res) {
     });
 });
 
-/**
- *
- * 슬로건 구매
- *
- * @id
- *
- */
+
 router.post('/purchaseSlogan', function (req, res) {
-    consoleInputLog(req.body);
+
     var id = req.body.id;
 
     if (!id) {
@@ -1331,16 +1692,7 @@ router.post('/purchaseSlogan', function (req, res) {
 });
 
 
-/**
- *
- * 슬로건 문구 및 url 변경
- * @id
- * @url
- * @sloganText
- *
- */
 router.post('/settingSlogan', function (req, res) {
-    consoleInputLog(req.body);
 
     const id = req.body.id;
     const sloganText = req.body.text;
@@ -1371,17 +1723,38 @@ router.post('/settingSlogan', function (req, res) {
 });
 
 
-/**
- *
- * 풍선모양 구매
- *
- * @id
- * @purchasedBalloonShape
- *
+
+
+/*
+
+ 1. purchaseBalloon
+ - @id, @purchasedBalloonShape
+ - 풍선모양 구매
+ 2. settingBalloon
+ - @id, @selectedBalloonShape, @selectedBalloonColor
+ - 풍선 색 및 모양 변경
+ 3. getNotice
+ - 슬로건 미구입시 공지사항 요청 -> 무슨말?
+ 4. delUser
+ - @id
+ - 회원 탈퇴
+
+ 5. setProfile
+ -  @id, @profile
+ - 프로필 설정
+ 6. background
+ -  배경색상 받아오기
+ 7. setBackground
+ - 배경색상 변경하기
+ 8. balloon/rgb
+ - 풍선색상 RGB 받아오기
+
  */
+
+
+
 router.post('/purchaseBalloon', function (req, res) {
 
-    consoleInputLog(req.body);
 
     var id = req.body.id;
     var purchasedBalloonShape = req.body.purchasedBalloonShape;
@@ -1407,18 +1780,7 @@ router.post('/purchaseBalloon', function (req, res) {
 });
 
 
-/**
- *
- * 풍선 색 및 모양 변경
- *
- * @id
- * @selectedBalloonShape
- * @selectedBalloonColor
- *
- */
 router.post('/settingBalloon', function (req, res) {
-
-    consoleInputLog(req.body);
 
     var id = req.body.id;
     var selectedBalloonShape = req.body.selectedBalloonShape;
@@ -1444,11 +1806,6 @@ router.post('/settingBalloon', function (req, res) {
 });
 
 
-/**
- *
- * 슬로건 미구입시 공지사항 요청
- *
- */
 router.get('/getNotice', function (req, res) {
     redisClient.select(0);
     redisClient.get(getNotice(), function (err, notice) {
@@ -1461,15 +1818,10 @@ router.get('/getNotice', function (req, res) {
     });
 });
 
-function getUserMatchedList(userId) {
-    return 'user:' + userId + ":matched";
-}
 
-/**
- * 회원 탈퇴
- * @id
- */
 router.post('/delUser', function (req, res) {
+
+
     const id = req.body.id;
 
     if (!id) {
@@ -1484,10 +1836,12 @@ router.post('/delUser', function (req, res) {
             return;
         }
 
+
         if (_.isEmpty(userInfo)) {
             sendMessage.sendErrorMessage(res, ERROR_NOT_EXIST_USER, err);
             return;
         }
+
 
         const multi = redisClient.multi();
         multi.select(0)
@@ -1498,13 +1852,18 @@ router.post('/delUser', function (req, res) {
             .srem(getUserID(), id)
             .srem(getCanGameUser(userInfo.fandomName), id)
             .select(1)
-            .del(getUserMatchedList(id))
-            .select(2)
-            .del(id);
-
-        for (let i = 0; i < GAME_BOARD; i++) {
+            .del(getUserMatchedList(id));
+        for (var i = 0; i < GAME_BOARD; i++) {
             multi.del(getUserGameInfo(id, i));
         }
+
+
+        multi.select(2)
+            .del(id);
+
+        multi.select(3)
+            .del(userStatus(id));
+
         multi.exec(function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
@@ -1516,12 +1875,11 @@ router.post('/delUser', function (req, res) {
     });
 });
 
-/**
- * 프로필 설정
- * @id
- * @profile
- */
+
+
+
 router.post('/setProfile', function (req, res) {
+
     const id = req.body.id;
     const profile = req.body.profile;
 
@@ -1541,14 +1899,13 @@ router.post('/setProfile', function (req, res) {
     });
 });
 
-/**
- * 배경색상 받아오기
- */
+
 router.get('/background', function (req, res) {
+
     redisClient.select(0);
     redisClient.hgetall(getBackground(), function (err, backgrounds) {
-        const colorList = [];
 
+        const colorList = [];
         const colors = _.keys(backgrounds);
 
         _.each(colors, function (color) {
@@ -1562,10 +1919,9 @@ router.get('/background', function (req, res) {
     });
 });
 
-/**
- * 배경색상 변경하기
- */
+
 router.post('/setBackground', function (req, res) {
+
     const id = req.body.id;
     const background = req.body.background;
 
@@ -1585,10 +1941,9 @@ router.post('/setBackground', function (req, res) {
     });
 });
 
-/**
- * 풍선색상 RGB 받아오기
- */
+
 router.get('/balloon/rgb', function (req, res) {
+
     redisClient.select(0);
     redisClient.hgetall(getBalloonColorRGB(), function (err, colorData) {
         if (err) {
@@ -1599,4 +1954,7 @@ router.get('/balloon/rgb', function (req, res) {
         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, colorData);
     });
 });
+
+
+
 module.exports = router;
