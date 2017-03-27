@@ -1,16 +1,15 @@
-var express = require('express');
-var redis = require('redis');
-var moment = require('moment');
-var _ = require('underscore');
+const express = require('express');
+const redis = require('redis');
+const moment = require('moment');
+const _ = require('underscore');
 const __ = require('lodash');
-var GoogleSpreadsheet = require("google-spreadsheet");
 
-var redisClient = redis.createClient(6379, 'fc-redis');
-// var redisClient = redis.createClient(6379, '127.0.0.1');
+const GoogleSpreadsheet = require("google-spreadsheet");
+const redisClient = redis.createClient(6379, 'fc-redis');
 
-var router = express.Router();
-var gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
-var hasStarByLevelSheet = new GoogleSpreadsheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
+const router = express.Router();
+const gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
+const hasStarByLevelSheet = new GoogleSpreadsheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
 
 const ERROR_SHEET = 101;
 const ERROR_SERVER = 202;
@@ -20,10 +19,13 @@ const SUCCEED_RESPONSE = 704;
 const SUCCEED_INIT_DB = 701;
 const GAME_BOARD = 36;
 const LOGIN_VALID_TIME = 60;
-const GAME_TIME = 30;
+
+const TIME_WEEK = 60*60*24*7;
 
 
-var message = {};
+
+
+let message = {};
 message[ERROR_SHEET] = "구글 스프레드시트 오류";
 message[ERROR_SERVER] = "서버연결 실패";
 message[ERROR_WRONG_INPUT] = "입력값 오류";
@@ -34,7 +36,7 @@ message[ERROR_NO_MATCH] = "게임 매칭 실패";
 
 
 function addMethod(object, functionName, func) {
-    var overloadingFunction = object[functionName];
+    const overloadingFunction = object[functionName];
     object[functionName] = function () {
         if (func.length == arguments.length)
             return func.apply(this, arguments);
@@ -42,6 +44,12 @@ function addMethod(object, functionName, func) {
             return overloadingFunction.apply(this, arguments);
     };
 }
+
+
+
+
+const sendMessage = new SendMessage();
+
 
 
 function SendMessage() {
@@ -66,13 +74,13 @@ function SendMessage() {
     });
 }
 
-var sendMessage = new SendMessage();
 
 
 function SetUserLogining() {
 
 
     addMethod(this, "setUserLogining", function (res, userId, protocol) {
+
 
         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, 'if settingDefenseMode, ok and else GameOver, usr: login competitorId: logout ');
 
@@ -90,8 +98,8 @@ function SetUserLogining() {
 
 
         const matchedInfo = {};
-        var multi;
-        var info;
+        let multi;
+        let info;
         const statusInfo = [];
 
         matchedInfo.id = userInfo.id;
@@ -108,6 +116,7 @@ function SetUserLogining() {
             .set(userStatus(competitorId), info)
             .select(1)
             .lpush(getUserMatchedList(competitorId), JSON.stringify(matchedInfo))
+            .expire(getUserMatchedList(competitorId),TIME_WEEK)
             .select(0)
             .exec(function (err) {
                 if (err) {
@@ -124,9 +133,9 @@ function SetUserLogining() {
     addMethod(this, "setUserRevenge", function (res, userId, competitorId, competitorGameInfo, userInfo) {
 
         const matchedInfo = {};
-        var multi;
+        let multi;
         const statusInfo = [];
-        var info;
+        let info;
 
         matchedInfo.id = userInfo.id;
         matchedInfo.time = userInfo.time;
@@ -141,6 +150,7 @@ function SetUserLogining() {
             .set(userStatus(competitorId),info)
             .select(1)
             .lpush(getUserMatchedList(competitorId), JSON.stringify(matchedInfo))
+            .expire(getUserMatchedList(competitorId),TIME_WEEK)
             .select(0)
             .exec(function (err) {
                 if (err) {
@@ -155,12 +165,12 @@ function SetUserLogining() {
     addMethod(this, "checkGhost", function (res, id, matchedInfo) {
 
 
-        var multi = redisClient.multi();
+        const multi = redisClient.multi();
 
 
         multi.select(1)
             .lrem(getUserMatchedList(id),0,matchedInfo)
-            .exec(function (err, reply) {
+            .exec(function (err) {
 
 
                 if(err){
@@ -168,7 +178,6 @@ function SetUserLogining() {
                     return;
                 }
 
-                var count = reply;
                 return;
 
             });
@@ -181,7 +190,7 @@ function SetUserLogining() {
 
 
 
-var setUserLogining = new SetUserLogining();
+const setUserLogining = new SetUserLogining();
 
 
 
@@ -190,7 +199,7 @@ function consoleInputLog(body) {
 }
 
 function makeRandom(min, max) {
-    var randomNumber = Math.random() * (max - min) + min;
+    const randomNumber = Math.random() * (max - min) + min;
     return Math.floor(randomNumber);
 }
 
@@ -286,19 +295,94 @@ const VAILD_DELAY_LOGOUT = 60;
 
 
 function  current_time() {
-    var time;
+    let time;
     time = moment().format('YYYY.MM.DD HH:mm');
     return time;
 }
+
+
 
 function userStatus(userid) {
     return 'status:'+ userid;
 }
 
 
-//-------------------* UPDATE_170222 *-------------------//
+function recordBattle(id) {
+    return 'battle:'+id;
+}
 
 
+
+
+//-------------------* UPDATE_170313~15 *-------------------//
+
+
+
+function time_format(time) {
+
+
+    let pre_time = new Date(time);
+
+
+    let old_time = pre_time;
+    let now_time = new Date();
+    let old = old_time.getTime();
+    let now = now_time.getTime();
+
+    let diff_time = Math.abs(now - old);
+    let num = 1000*3600*24;
+    let diff_day = Math.floor(diff_time/num);
+    let day;
+
+
+
+    if(diff_day == 0){
+
+
+        let check = moment(now_time).format('a');
+
+        if(check == 'pm'){
+            day = moment(old_time).format('h:mm');
+            day = '오후 '+day;
+        }else{
+            day = moment(old_time).format('h:mm');
+            day = '오전 '+day;
+        }
+
+
+    }else {
+
+        day = moment(old_time).format('dddd');
+
+        switch (day) {
+            case 'Monday'    : day = '월요일';
+                break;
+            case 'Tuesday'   : day = '화요일';
+                break;
+            case 'Wednesday'  : day = '수요일';
+                break;
+            case 'Thursday'  : day = '목요일';
+                break;
+            case 'Friday'  : day = '금요일';
+                break;
+            case 'Saturday'  : day = '토요일';
+                break;
+            case 'Sunday'  : day = '일요일';
+                break;
+            default    : day = '팬덤데이';
+                break;
+
+        }
+
+    }
+    return day;
+
+}
+
+router.get('/test', function (req, res) {
+    let time = '2017.02.21 16:37';
+    time_format(time);
+});
 
 
 
@@ -348,9 +432,9 @@ router.post('/userMatchedList', function (req, res) {
             return 'user:'+id+':info';
         }
 
-        var count = 0;
-        var temp_matchedInfo;
-        var temp_matchedInfos = [];
+        let count = 0;
+        let temp_matchedInfo;
+        let temp_matchedInfos = [];
         const multi = redisClient.multi();
 
 
@@ -384,7 +468,7 @@ router.post('/userMatchedList', function (req, res) {
 
                 if (exist == 0){
 
-                    var temp_info = matchedInfo[count];
+                    let temp_info = matchedInfo[count];
                     temp_matchedInfos.push(temp_info);
                     ++count;
                     return;
@@ -401,8 +485,8 @@ router.post('/userMatchedList', function (req, res) {
 
             _.each(temp_matchedInfos, function (info) {
 
-                var infos = JSON.parse(info);
-                var string_infos = JSON.stringify(infos);
+                let infos = JSON.parse(info);
+                let string_infos = JSON.stringify(infos);
                 multi.lrem(getUserMatchedList(id),0,string_infos);
 
             });
@@ -420,12 +504,17 @@ router.post('/userMatchedList', function (req, res) {
                 ///////////////////////[시작]여기에 기존에 있는 값을 넣어보자////////////////////////////////
 
 
+
+
+
+
                 multi.select(0);
 
                 matchedInfo.forEach(function (info) {
                     const matchedInfo = JSON.parse(info)
                     multi.hgetall(getUserInfo(matchedInfo.id));
                 });
+
 
 
 
@@ -439,6 +528,8 @@ router.post('/userMatchedList', function (req, res) {
 
                     const histories = [];
 
+
+
                     matchedUserInfos.forEach(function (info, index) {
 
 
@@ -449,11 +540,36 @@ router.post('/userMatchedList', function (req, res) {
                         if (index == 0)
                             return;
 
-                        _.extend(info, JSON.parse(matchedInfo[index - 1]));
+
+                        /////////////업데이트170315///////////////////
+
+                        /*
+                         시간 포맷 변경하기
+                         1. 당일: 시간
+                         2. 이전: 일 ~ 토요일
+                         */
+
+                        let infos = JSON.parse(matchedInfo[index - 1]);
+                        let infos_time = infos.time;
+                        let change_time = time_format(infos_time);
+                        let extend_time= {};
+                        extend_time.time = change_time;
+
+                        _.extend(info,extend_time);
                         histories.push(info);
 
 
+                        ///////////////////////////////////////////////////
+
+
                     });
+
+
+
+
+
+
+
 
                     //중복된 아이디 카운트
                     const userCount = __.countBy(histories, function (info) {
@@ -475,18 +591,17 @@ router.post('/userMatchedList', function (req, res) {
                     //사용자가 공격 가능한 상태인지 파악하는 부분
                     multi.select(3);
 
-                    var temp_id;
+                    let temp_id;
 
                     _.each(result, function (info) {
                         temp_id = info.id;
                         multi.exists(userStatus(temp_id));
+
                     });
 
 
-                    multi.exec(function (err, isExists) {
 
-                        var flag;
-                        flag = isExists;
+                    multi.exec(function (err, isExists) {
 
 
                         if (err) {
@@ -500,17 +615,14 @@ router.post('/userMatchedList', function (req, res) {
                                 return;
 
 
-                            if (exist)
+                            if (exist) {
                                 result[index - 1].canGame = false;
-
-                            else {
+                            }else{
                                 result[index - 1].canGame = true;
                             }
 
-                            // consoleInputLog("result[index - 1].canGame: "+result[index - 1].canGame);
-
-
                         });
+
                         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, {matchedInfo: result});
                     });
 
@@ -526,11 +638,11 @@ router.post('/userMatchedList', function (req, res) {
 
         });
 
-        /*------------------------------추가되는 부분2-------------------------------------------*/
-
     });
 
 });
+
+
 
 
 
@@ -550,13 +662,14 @@ router.post('/userMatchedList', function (req, res) {
 router.post('/startLogin', function (req, res) {
 
 
-    var id;
-    var status_login;
-    var multi;
+    let id;
+    let multi;
+    let flag_time;
+    let flag_playing = false;
+    let flag_id = false;
 
 
     id = req.body.id;
-    status_login  = "login";
     multi = redisClient.multi();
 
 
@@ -565,6 +678,56 @@ router.post('/startLogin', function (req, res) {
         return;
     }
 
+    //1. 사용자 공격 상대방 확인
+    multi.select(2)
+        .get(recordBattle(id))
+        .exec(function (err,reply) {
+
+            if(err){
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+            }
+
+
+            let info;
+            let time;
+            info = JSON.parse(reply[1]);
+
+            if(!info){
+
+                flag_playing = false;
+
+            }else{
+
+                time = info[1];
+
+
+
+                let enemy_time = time;
+                let user_time = moment().format('YYYY.MM.DD HH:mm');
+                let old = new Date (enemy_time);
+                let now = new Date(user_time);
+
+                let old_time = old.getTime();
+                let now_time = now.getTime();
+                flag_time = DELAY_MATCHING_TIME * 0.1;
+
+                if(flag_time < now_time - old_time){
+                    flag_playing = false;
+                }else{
+                    flag_playing = true;
+                }
+
+
+
+            }
+
+
+
+        });
+
+
+
+    //2. 사용자 방어 상대방 확인
 
     redisClient.select(1);
     redisClient.lrange(getUserMatchedList(id), 0, -1, function (err, matchedInfo) {
@@ -577,23 +740,29 @@ router.post('/startLogin', function (req, res) {
         if (_.isEmpty(matchedInfo)) {
 
             redisClient.select(3);
-            var statusInfo = [];
+            let statusInfo = [];
             statusInfo.push("login");
             statusInfo.push(current_time());
-            var info = JSON.stringify(statusInfo);
+            let info = JSON.stringify(statusInfo);
             redisClient.set(userStatus(id),info);
 
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "yes");
 
+            if(flag_playing){
+                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
+                return;
+            }
+
+
+            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "yes");
             return;
         }
 
 
-        var temp_time;
-        var temp_id;
-        var match_time=[];
-        var match_id = [];
-        var i=0;
+        let temp_time;
+        let temp_id;
+        let match_time=[];
+        let match_id = [];
+        let i=0;
 
         matchedInfo.forEach(function (info) {
 
@@ -609,7 +778,13 @@ router.post('/startLogin', function (req, res) {
         });
 
 
+
         const enemy_id = String(match_id[0]);
+
+
+
+
+
 
         multi.select(3)
             .get(userStatus(enemy_id))
@@ -620,12 +795,12 @@ router.post('/startLogin', function (req, res) {
                 }
 
 
-                var temp = [];
-                var status;
+                let temp;
+                let status;
                 temp = JSON.parse(reply[1]);
 
 
-                if(temp ==null){
+                if(!temp){
                     status = 'logout';
                 }else{
                     status = temp[0];
@@ -634,36 +809,84 @@ router.post('/startLogin', function (req, res) {
 
                 const enemy_time = match_time[0];
                 const user_time = moment().format('YYYY.MM.DD HH:mm');
-                var old = new Date (enemy_time);
-                var now = new Date(user_time);
+                let old = new Date(enemy_time);
+                let now = new Date(user_time);
+                let old_time = old.getTime();
+                let now_time = now.getTime();
+                let matching_time = DELAY_MATCHING_TIME * 12;
 
-                var old_time = old.getTime();
-                var now_time = now.getTime();
-                var matching_time = DELAY_MATCHING_TIME;
 
 
-                if(now_time-old_time < matching_time && status =="playing"){
 
-                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
+                multi.select(2)
+                    .get(recordBattle(enemy_id))
+                    .exec(function (err, reply) {
 
-                }else {
 
-                    redisClient.select(3);
-                    const statusInfo = [];
-                    statusInfo.push("login");
-                    statusInfo.push(current_time());
-                    const info = JSON.stringify(statusInfo);
-                    redisClient.set(userStatus(id),info);
+                        if(err){
+                            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                            return;
+                        }
 
-                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "yes");
 
-                }
+                        if(!reply){
+
+                            flag_id = false;
+
+                        }else{
+
+                            let info_battle = JSON.parse(reply[1]);
+                            let other_id = info_battle[0];
+
+
+                            if(other_id == id){
+                                flag_id = true;
+                            }else{
+                                flag_id = false;
+                            }
+
+                        }
+
+
+
+                        if(now_time-old_time < matching_time && status =="playing" && flag_id == true){
+
+                            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
+
+                        }else {
+
+
+
+                            if(flag_playing){
+                                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
+                                return;
+                            }
+
+
+                            redisClient.select(3);
+                            const statusInfo = [];
+                            statusInfo.push("login");
+                            statusInfo.push(current_time());
+                            const info = JSON.stringify(statusInfo);
+                            redisClient.set(userStatus(id),info);
+
+                            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "yes");
+
+                        }
+
+
+
+
+                    });
+
+
 
 
             });
 
     });
 });
+
 
 
 
@@ -684,11 +907,11 @@ router.post('/startLogin', function (req, res) {
 router.post('/btnResumeToGame', function (req,res) {
 
 
-    var id;
-    var competitorId;
-    var multi;
-    const statusInfo = [];
-    var info;
+    let id;
+    let competitorId;
+    let multi;
+    let statusInfo = [];
+    let info;
 
 
     id = req.body.id;
@@ -703,12 +926,14 @@ router.post('/btnResumeToGame', function (req,res) {
     multi.select(3)
         .set(userStatus(id),info)
         .set(userStatus(competitorId), info)
+        .expire(userStatus(id),LOGIN_VALID_TIME)
+        .expire(userStatus(competitorId),LOGIN_VALID_TIME)
         .exec(function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
-            sendMessage.sendSucceedMessage(res, 'user: playing, competitor: playing');
+            sendMessage.sendSucceedMessage(res, 'user: playing (expire 60), competitor: playing (expire 60)');
         });
 });
 
@@ -737,37 +962,55 @@ router.post('/btnResumeToGame', function (req,res) {
 router.post('/pauseOnGame', function (req,res) {
 
 
-    var userId;
-    var competitorId;
-    var time;
-    var multi;
+    let userId;
+    let competitorId;
+    let multi;
 
     userId = req.body.id;
     competitorId = req.body.competitorId;
     multi = redisClient.multi();
-    time = VAILD_DELAY_LOGOUT;
 
 
-    multi.select(3)
-        .expire(userStatus(userId),time)
-        .expire(userStatus(competitorId),time)
-        .exec(function (err) {
+    if(!competitorId){
 
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                return;
-            }
-            sendMessage.sendSucceedMessage(res, 'user: logout(expire 60), competitor: logout(expire 60)');
-        });
+        multi.select(3)
+            .expire(userStatus(userId),LOGIN_VALID_TIME)
+            .exec(function (err) {
+
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, 'user: playing (expire 60)');
+            });
+
+    }else{
+
+
+        multi.select(3)
+            .expire(userStatus(userId),LOGIN_VALID_TIME)
+            .expire(userStatus(competitorId),LOGIN_VALID_TIME)
+            .exec(function (err) {
+
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, 'user: playing (expire 60), competitor: playing(expire 60)');
+            });
+
+
+    }
+
 });
 
 
 router.post('/resumeOnGame', function (req,res) {
 
 
-    var userId;
-    var competitorId;
-    var multi;
+    let userId;
+    let competitorId;
+    let multi;
 
     userId = req.body.id;
     competitorId = req.body.competitorId;
@@ -776,31 +1019,57 @@ router.post('/resumeOnGame', function (req,res) {
     const statusInfo = [];
     statusInfo.push("playing");
     statusInfo.push(current_time());
-    var info = JSON.stringify(statusInfo);
+    let info = JSON.stringify(statusInfo);
 
-    multi.select(3)
-        .set(userStatus(userId),info)
-        .set(userStatus(competitorId),info)
-        .expire(userStatus(userId), LOGIN_VALID_TIME*0.5)
-        .expire(userStatus(competitorId), LOGIN_VALID_TIME*0.5)
-        .exec(function (err) {
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                return;
-            }
-            sendMessage.sendSucceedMessage(res, 'user: playing(expire 30), competitor: playing(expire 30)');
-        });
+
+    if(!competitorId){
+
+        multi.select(3)
+            .set(userStatus(userId),info)
+            .expire(userStatus(userId), LOGIN_VALID_TIME)
+            .exec(function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, 'user: playing(expire 60)');
+            });
+
+    }else{
+
+        multi.select(3)
+            .set(userStatus(userId),info)
+            .set(userStatus(competitorId),info)
+            .expire(userStatus(userId), LOGIN_VALID_TIME)
+            .expire(userStatus(competitorId), LOGIN_VALID_TIME)
+            .exec(function (err) {
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, 'user: playing(expire 60), competitor: playing(expire 60)');
+            });
+
+    }
+
+
 });
+
+
+
+
+
+
 
 
 router.post('/btnExitOnGame', function (req,res) {
 
 
-    var userId;
-    var competitorId;
-    var multi;
+    let userId;
+    let competitorId;
+    let multi;
     const statusInfo = [];
-    var info;
+    let info;
 
     userId = req.body.id;
     competitorId = req.body.competitorId;
@@ -827,25 +1096,44 @@ router.post('/btnExitOnGame', function (req,res) {
 router.post('/exitOnGame', function (req,res) {
 
 
-    var id;
-    var competitorId;
-    var multi;
+    let id;
+    let competitorId;
+    let multi;
 
     id = req.body.id;
     competitorId = req.body.competitorId;
     multi = redisClient.multi();
 
-    multi.select(3)
-        .del(userStatus(id))
-        .del(userStatus(competitorId))
-        .exec(function (err) {
+    if(!competitorId){
 
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                return;
-            }
-            sendMessage.sendSucceedMessage(res, 'user:logout, competitor: logout');
-        });
+        multi.select(3)
+            .del(userStatus(id))
+            .exec(function (err) {
+
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, 'user:logout');
+            });
+
+    }else{
+
+        multi.select(3)
+            .del(userStatus(id))
+            .del(userStatus(competitorId))
+            .exec(function (err) {
+
+                if (err) {
+                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
+                    return;
+                }
+                sendMessage.sendSucceedMessage(res, 'user:logout, competitor: logout');
+            });
+
+    }
+
+
 });
 
 
@@ -895,12 +1183,12 @@ router.get('/initLevelRatio', function (req, res) {
             return;
         }
 
-        var rowKeys = Object.keys(rowData);
+        const rowKeys = Object.keys(rowData);
 
         rowKeys.forEach(function (key) {
-            var keys = Object.keys(rowData[key]);
+            const keys = Object.keys(rowData[key]);
 
-            var multi = redisClient.multi();
+            const multi = redisClient.multi();
             multi.select(1)
                 .hset(getGameLevelRatio(), rowData[key][keys[3]], rowData[key][keys[4]])
                 .exec(function (err) {
@@ -924,12 +1212,12 @@ router.get('/initHasStarByLevel', function (req, res) {
             return;
         }
 
-        var rowKeys = Object.keys(rowData);
+        const rowKeys = Object.keys(rowData);
 
         rowKeys.forEach(function (key) {
-            var keys = Object.keys(rowData[key]);
+            const keys = Object.keys(rowData[key]);
 
-            var multi = redisClient.multi();
+            const multi = redisClient.multi();
             multi.select(1)
                 .hset(getHasStarByLevel(), rowData[key][keys[3]], rowData[key][keys[4]])
                 .exec(function (err) {
@@ -944,17 +1232,19 @@ router.get('/initHasStarByLevel', function (req, res) {
 });
 
 
+
+
 router.post('/gameStart', function (req, res) {
 
-    var userFandomName = req.body.fandomName;
-    var userId = req.body.userId;
+    const userFandomName = req.body.fandomName;
+    const userId = req.body.userId;
 
     if (!userFandomName) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
-    var multi = redisClient.multi();
+    const multi = redisClient.multi();
     multi.select(0)
         .zrange(getFandomUserNumber(), 0, -1, 'withscores')
         .exec(function (err, reply) {
@@ -962,14 +1252,14 @@ router.post('/gameStart', function (req, res) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
-            var fandomUserNumbers = reply[1];
-            var fandomExistingUserList = [];
+            let fandomUserNumbers = reply[1];
+            let fandomExistingUserList = [];
 
-            for (var i = 0; i < fandomUserNumbers.length; i = i + 2) {
-                var fandomName = fandomUserNumbers[i];
-                var userNumber = fandomUserNumbers[i + 1];
+            for (let i = 0; i < fandomUserNumbers.length; i = i + 2) {
+                let fandomName = fandomUserNumbers[i];
+                let userNumber = fandomUserNumbers[i + 1];
                 if (userNumber != 0 && userFandomName != fandomName && fandomName != getFieldCANT_GAME()) {
-                    var fandomInfo = {};
+                    let fandomInfo = {};
                     fandomInfo[getFieldFandomName()] = fandomName;
                     fandomInfo[getFieldUserNumber()] = userNumber;
                     fandomExistingUserList.push(fandomInfo);
@@ -1011,15 +1301,15 @@ router.post('/gameStart', function (req, res) {
 });
 
 
-var searchCompetitorId = function (fandomExistingUserList, count, callback) {
+const searchCompetitorId = function (fandomExistingUserList, count, callback) {
 
 
-    var randomIndex = makeRandom(0, fandomExistingUserList.length);
-    var competitorFandomInfos = fandomExistingUserList[randomIndex];
-    var competitorFandomName = competitorFandomInfos[getFieldFandomName()];
+    let randomIndex = makeRandom(0, fandomExistingUserList.length);
+    let competitorFandomInfos = fandomExistingUserList[randomIndex];
+    let competitorFandomName = competitorFandomInfos[getFieldFandomName()];
 
 
-    var multi = redisClient.multi();
+    const multi = redisClient.multi();
     multi.select(0)
         .srandmember(getCanGameUser(competitorFandomName))
         .exec(function (err, reply) {
@@ -1028,14 +1318,17 @@ var searchCompetitorId = function (fandomExistingUserList, count, callback) {
                 return;
             }
 
-            var competitorId = reply[1];
+            let competitorId = reply[1];
+
+
+
 
             multi.select(3)
                 .exists(userStatus(competitorId))
                 .exec(function (err, reply) {
 
                     ++count;
-                    var isLogining = reply[1]; // 0: 로그아웃 1: 로그인 플레이
+                    let isLogining = reply[1]; // 0: 로그아웃 1: 로그인 플레이
 
                     if (count == 5) {
                         competitorId = null;
@@ -1045,25 +1338,28 @@ var searchCompetitorId = function (fandomExistingUserList, count, callback) {
                     else if (isLogining)
                         searchCompetitorId(fandomExistingUserList, count, callback);
 
-                    else if (!isLogining)
+                    else if (!isLogining) {
+
+
                         callback(competitorId);
 
 
-                    const time = moment().format('YYYY.MM.DD HH:mm');
-                    var status = "[\"playing\",\""+time+"\"]";
-                    var multi_sec = redisClient.multi();
+                        const time = moment().format('YYYY.MM.DD HH:mm');
+                        let status = "[\"playing\",\"" + time + "\"]";
 
 
-                    multi_sec.select(3)
-                        .set(userStatus(competitorId),status)
-                        .exec(function (err,reply) {
-                            if(err){
-                                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+
+                        multi.select(3)
+                            .set(userStatus(competitorId), status)
+                            .exec(function (err) {
+                                if (err) {
+                                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                                    return;
+                                }
+
                                 return;
-                            }
-
-                            return;
-                        })
+                            });
+                    }
 
                 });
         });
@@ -1073,7 +1369,11 @@ var searchCompetitorId = function (fandomExistingUserList, count, callback) {
 
 
 
-var getCompetitorUserInfo = function (competitorId, callback) {
+const getCompetitorUserInfo = function (competitorId, callback) {
+
+
+
+
 
     const multi = redisClient.multi();
     multi.select(0)
@@ -1086,14 +1386,17 @@ var getCompetitorUserInfo = function (competitorId, callback) {
 
             const competitorInfo = reply[1];
 
-            var multi = redisClient.multi();
+            // const multi = redisClient.multi();
             multi.select(1);
 
-            for (var i = 0; i < GAME_BOARD; i++)
+            for (let i = 0; i < GAME_BOARD; i++)
                 multi.hgetall(getUserGameInfo(competitorId, i));
 
-            for (var j = 0; j < GAME_BOARD; j++)
+            for (let j = 0; j < GAME_BOARD; j++)
                 multi.hget(getUserGameInfo(competitorId, j), getFieldGameBalloon());
+
+
+
 
             multi.hget(getHasStarByLevel(), competitorInfo.level)
                 .select(0)
@@ -1104,28 +1407,28 @@ var getCompetitorUserInfo = function (competitorId, callback) {
                         return;
                     }
 
-                    var competitorGameInfos = [];
-                    var competitorTotalBalloon = 0;
+                    let competitorGameInfos = [];
+                    let competitorTotalBalloon = 0;
 
-                    for (var i = 1; i < replies.length - 3; i++) {
+                    for (let i = 1; i < replies.length - 3; i++) {
                         if (i <= GAME_BOARD)
                             competitorGameInfos.push(replies[i]);
                         else
                             competitorTotalBalloon += parseInt(replies[i]);
                     }
 
-                    var competitorHasStarNumber = parseInt(replies[replies.length - 3]);
-                    var competitorRank = parseInt(replies[replies.length - 1]) + 1;
+                    let competitorHasStarNumber = parseInt(replies[replies.length - 3]);
+                    let competitorRank = parseInt(replies[replies.length - 1]) + 1;
 
                     competitorInfo.competitorRank = competitorRank;
 
-                    var competitorGameCountInfo = {
+                    const competitorGameCountInfo = {
                         'totalBalloon': competitorTotalBalloon,
                         'bigStar': parseInt(competitorHasStarNumber / 10),
                         'smallStar': competitorHasStarNumber % 10
                     };
 
-                    var result = {};
+                    let result = {};
                     result[getFieldCompetitorInfo()] = competitorInfo;
                     result[getFieldCompetitorGameInfos()] = competitorGameInfos;
                     result[getFieldCompetitorGameCountInfo()] = competitorGameCountInfo;
@@ -1135,20 +1438,24 @@ var getCompetitorUserInfo = function (competitorId, callback) {
 };
 
 
+
 router.post('/gameOver', function (req, res) {
 
 
-    var userId = req.body.userId;
-    var userFandomName = req.body.userFandomName;
-    var userGetStarCount = req.body.userGetStarCount;
-    var userCoinCount = req.body.userCoinCount;
-    var userGetBalloonCount = req.body.userGetBalloonCount;
+    const userId = req.body.userId;
+    const userFandomName = req.body.userFandomName;
+    const userGetStarCount = req.body.userGetStarCount;
+    const userCoinCount = req.body.userCoinCount;
+    const userGetBalloonCount = req.body.userGetBalloonCount;
 
-    var competitorId = req.body.competitorId;
-    var competitorGameInfo = req.body.competitorGameInfo;
-    var multi = redisClient.multi();
-    const statusInfo = [];
-    var info;
+    const competitorId = req.body.competitorId;
+    const competitorGameInfo = req.body.competitorGameInfo;
+    const multi = redisClient.multi();
+    let statusInfo = [];
+    let recBattle= [];
+    let info;
+    let info_battle;
+
 
 
     if (!userId || !userGetStarCount || !userCoinCount
@@ -1158,9 +1465,15 @@ router.post('/gameOver', function (req, res) {
     }
 
 
+
+
     statusInfo.push("login");
     statusInfo.push(current_time());
     info = JSON.stringify(statusInfo);
+
+    recBattle.push(competitorId);
+    recBattle.push(current_time());
+    info_battle = JSON.stringify(recBattle);
 
 
     multi.select(0)
@@ -1170,24 +1483,30 @@ router.post('/gameOver', function (req, res) {
         .zincrby(getUserRank(userFandomName), userGetStarCount, userId)
         .hincrby(getUserInfo(userId), getFieldBalloonCount(), userGetBalloonCount)
         .hset(getUserInfo(userId), getFieldCoinCount(), userCoinCount)
-
         .select(3)
         .set(userStatus(userId),info )
         .del(userStatus(competitorId))
+        .select(2)
+        .set(recordBattle(userId),info_battle)
         .exec(function (err) {
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
-            var splitedGameInfo = competitorGameInfo.split(",");
 
-            var multi = redisClient.multi();
+            let splitedGameInfo = competitorGameInfo.split(",");
+            // var multi = redisClient.multi();
+
+
             multi.select(1);
-            for (var i = 0; i < GAME_BOARD; i++)
+
+            for (let i = 0; i < GAME_BOARD; i++)
                 multi.hmset(getUserGameInfo(competitorId, i), getFieldGameBalloon(), splitedGameInfo[i * 3]
                     , getFieldStarType(), splitedGameInfo[i * 3 + 1], 'pin', splitedGameInfo[i * 3 + 2]
                 );
+
+
 
             multi.exec(function (err) {
                 if (err) {
@@ -1201,11 +1520,18 @@ router.post('/gameOver', function (req, res) {
 });
 
 
+
+
+
+
+
+
+
 router.post('/settingDefenseMode', function (req, res) {
 
 
-    var id = req.body.id;
-    var userGameInfo = req.body.userGameInfo;
+    const id = req.body.id;
+    const userGameInfo = req.body.userGameInfo;
 
     if (!id || !userGameInfo) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
@@ -1213,11 +1539,11 @@ router.post('/settingDefenseMode', function (req, res) {
     }
 
 
-    var splitedGameInfo = userGameInfo.split(",");
+    const splitedGameInfo = userGameInfo.split(",");
+    const multi = redisClient.multi();
 
-    var multi = redisClient.multi();
     multi.select(1);
-    for (var i = 0; i < GAME_BOARD; i++)
+    for (let i = 0; i < GAME_BOARD; i++)
         multi.hmset(getUserGameInfo(id, i), 'gameBalloon', splitedGameInfo[i * 3], 'starType', splitedGameInfo[i * 3 + 1], 'pin', splitedGameInfo[i * 3 + 2]);
 
     multi.exec(function (err) {
@@ -1229,6 +1555,11 @@ router.post('/settingDefenseMode', function (req, res) {
         setUserLogining.setUserLogining(res, id, 'settingDefenseMode');
     });
 });
+
+
+
+
+
 
 
 router.post('/gameMatch', function (req, res) {
