@@ -5,12 +5,12 @@ const GoogleSpreadSheet = require("google-spreadsheet");
 
 
 const redisClient = redis.createClient(6379, 'fc-redis');
+// const redisClient = redis.createClient(6379, '127.0.0.1');
 
 
 const router = express.Router();
 const _ = require('underscore');
 const fs = require('fs');
-
 
 
 const fandomListSheet = new GoogleSpreadSheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjBQZuYqH5vQ');
@@ -20,8 +20,9 @@ const noticeSheet = new GoogleSpreadSheet('1fSC13hjAqYxjr9mFDoDSf7ZvkpOl2dUiOid7
 const backgroundSheet = new GoogleSpreadSheet('1_AT0C1__Dt67lR4IiBYQxuGrCKUikR_kCy4b2lU05WQ');
 const fdcValueSheet = new GoogleSpreadSheet('1T1ng3UyTx20JAyZigDihk1YATyrED9aC9ioZOcoG-Lk');
 const logger = require('../functions/logger');
-const LOGIN_VALID_TIME = 60;
 
+
+const LOGIN_VALID_TIME = 60;
 
 
 const GAME_BOARD = 36;
@@ -60,7 +61,6 @@ message[ERROR_LOGINED] = "이미 로그인 되어있는 사용자 입니다";
 message[ERROR_NOT_EXIST_USER] = "유저가 존재하지 않습니다";
 
 
-
 // 클래스 인스턴스 > 함수 > 함수 내용 : 이렇게 차례대로 분류해서 사용하는 거였음
 
 
@@ -74,28 +74,34 @@ function addMethod(object, functionName, func) {
     };
 }
 
+
 function SendMessage() {
+
+    addMethod(this, "sendSucceedNotice", function (res, succeedCode) {
+        res.send({data: succeedCode});
+        // console.log({data: succeedCode});
+    });
+
     addMethod(this, "sendSucceedMessage", function (res, succeedCode) {
         res.send({succeedCode: succeedCode});
-        console.log({succeedCode: succeedCode});
+        // console.log({succeedCode: succeedCode});
     });
 
     addMethod(this, "sendSucceedMessage", function (res, succeedCode, sendData) {
         res.send({succeedCode: succeedCode, data: sendData});
-        console.log({succeedCode: succeedCode, data: sendData})
+        // console.log({succeedCode: succeedCode, data: sendData})
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode, err) {
         res.send({errorCode: errorCode, errorMessage: message[errorCode]});
-        console.log({errorCode: errorCode, errorMessage: message[errorCode], error: err});
+        // console.log({errorCode: errorCode, errorMessage: message[errorCode], error: err});
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode) {
         res.send({errorCode: errorCode, errorMessage: message[errorCode]});
-        console.log({errorCode: errorCode, errorMessage: message[errorCode]});
+        // console.log({errorCode: errorCode, errorMessage: message[errorCode]});
     });
 }
-
 
 
 const sendMessage = new SendMessage();
@@ -211,28 +217,20 @@ function getFieldSelectedBalloonShape() {
 }
 
 
-
-
 ///////////////////////// GILVERT /////////////////////////
-
-
-// 업데이트 17.03.27
-
 
 
 //------------------------* 공통 *------------------------//
 
 
-
 const noticeUpdateSheet = new GoogleSpreadSheet('1a_HkK-e4t6hCG8mmIp-JJEtsuPTeTF0VXX1pqFQMcTU');
-
 
 
 function getNoticeUpdate() {
     return 'notice:update';
 }
 
-function  current_time() {
+function current_time() {
     let time;
     time = moment().format('YYYY.MM.DD HH:mm');
     return time;
@@ -244,7 +242,7 @@ function initGameValue() {
 }
 
 function userStatus(userid) {
-    return 'status:'+ userid;
+    return 'status:' + userid;
 }
 
 function getFieldCoinCount() {
@@ -256,18 +254,97 @@ function getFandomStar() {
 }
 
 
-
 function recordBattle(id) {
-    return 'battle:'+id;
+    return 'battle:' + id;
 }
 
+
+//-------------------* UPDATE_170329 *-------------------//
+
+
+/*
+
+ 1. updateLevel
+ - 사용자 레벨 업데이트
+
+ */
+
+
+router.post('/updateLevel', function (req, res) {
+
+    const userId = req.body.userId;
+    const userFandomName = req.body.userFandomName;
+
+    const multi = redisClient.multi();
+    let userLevel;
+
+
+    multi.select(0)
+        .zcard(getFandomRank())
+        .zrank(getFandomRank(), userFandomName)
+        .exec(function (err, replies) {
+
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_FANDOM_RANK_LOAD, err);
+                return;
+            }
+
+            let allFandomNumber = replies[1];
+            let fandomRank = allFandomNumber - replies[2];
+            let userFandomRankRatio = fandomRank / allFandomNumber;
+
+
+            multi.select(1)
+                .hgetall(getGameLevelRatio())
+                .exec(function (err, reply) {
+                    if (err) {
+                        sendMessage.sendErrorMessage(res, ERROR_LEVEL_RATIO_LOAD, err);
+                        return;
+                    }
+
+                    let allLevelRatio = reply[1];
+
+
+                    if (fandomRank == 0) {
+                    }
+
+                    for (let i = 5; i > 0; i--) {
+                        if (userFandomRankRatio <= allLevelRatio[i]) {
+                            userLevel = i;
+                            break;
+                        }
+                    }
+
+                    multi.select(0)
+                        .hmset(getUserInfo(userId), 'level', userLevel)
+                        .exec(function (err) {
+
+                            if (err) {
+                                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                                return;
+
+                            }
+
+                            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, userLevel);
+                        });
+                });
+        });
+
+
+});
 
 
 //-------------------* UPDATE_170316 *-------------------//
 
 
+/*
 
-router.post('/btnBackOnGame', function (req,res) {
+ 1. btnBackOnGame
+ - 진행안함
+
+ */
+
+router.post('/btnBackOnGame', function (req, res) {
 
     let id;
     let competitorId;
@@ -291,11 +368,6 @@ router.post('/btnBackOnGame', function (req,res) {
 });
 
 
-
-
-
-
-
 //-------------------* UPDATE_170303 *-------------------//
 
 /*
@@ -310,7 +382,6 @@ router.post('/btnBackOnGame', function (req,res) {
  */
 
 
-
 router.post('/settingBalloon', function (req, res) {
 
     const id = req.body.id;
@@ -319,12 +390,10 @@ router.post('/settingBalloon', function (req, res) {
     const fandomName = req.body.fandomName;
 
 
-
     if (!id || !selectedBalloonShape || !selectedBalloonColor) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
-
 
 
     const multi = redisClient.multi();
@@ -332,7 +401,7 @@ router.post('/settingBalloon', function (req, res) {
 
 
     multi.select(0)
-        .hget(getUserInfo(id),balloonColor)
+        .hget(getUserInfo(id), balloonColor)
         .exec(function (err, reply) {
 
 
@@ -343,8 +412,8 @@ router.post('/settingBalloon', function (req, res) {
 
             let pre_balloonColor = reply[1];
 
-            multi.zincrby(getFandomBalloonRank(fandomName), -1, pre_balloonColor )
-                .zincrby(getFandomBalloonRank(fandomName), 1, selectedBalloonColor )
+            multi.zincrby(getFandomBalloonRank(fandomName), -1, pre_balloonColor)
+                .zincrby(getFandomBalloonRank(fandomName), 1, selectedBalloonColor)
                 .hmset(getUserInfo(id), getFieldSelectedBalloonShape(), selectedBalloonShape, getFieldSelectedBalloonColor(), selectedBalloonColor)
                 .exec(function (err) {
 
@@ -362,18 +431,7 @@ router.post('/settingBalloon', function (req, res) {
 });
 
 
-
-
-
-
-
-
-
-
-
-
 //-------------------* UPDATE_170222 *-------------------//
-
 
 
 /*
@@ -384,8 +442,7 @@ router.post('/settingBalloon', function (req, res) {
  */
 
 
-
-router.get('/delTrashUser', function (req,res) {
+router.get('/delTrashUser', function (req, res) {
 
 
     const multi = redisClient.multi();
@@ -408,22 +465,21 @@ router.get('/delTrashUser', function (req,res) {
             _.each(keys_id, function (id) {
 
 
-                let count =0;
+                let count = 0;
 
 
                 multi.get(id)
                     .exec(function (err, reply) {
 
 
-                        if(err){
+                        if (err) {
                             sendMessage.sendErrorMessage(res, err);
                         }
 
-                        rec_reply =JSON.parse(reply[count]);
+                        rec_reply = JSON.parse(reply[count]);
 
 
-
-                        if(rec_reply[0]=='login') {
+                        if (rec_reply[0] == 'login') {
 
                             const pre_time = rec_reply[1];
                             const current_time = moment().format('YYYY.MM.DD HH:mm');
@@ -447,37 +503,14 @@ router.get('/delTrashUser', function (req,res) {
                     });
 
 
-
             });
 
-            sendMessage.sendSucceedMessage(res,'succeed');
+            sendMessage.sendSucceedMessage(res, 'succeed');
 
 
         });
 
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 //-------------------* UPDATE_170213 *-------------------//
@@ -490,15 +523,12 @@ router.get('/delTrashUser', function (req,res) {
  - 존재하면 대전 불가능 존재하지 않으면 대전 가능
  */
 
-router.post('/statusCompetitor', function (req,res) {
-
-
+router.post('/statusCompetitor', function (req, res) {
     let competitorId;
     let multi;
 
     competitorId = req.body.competitorId;
     multi = redisClient.multi();
-
     multi.select(3)
         .get(userStatus(competitorId))
         .exec(function (err, reply) {
@@ -510,21 +540,15 @@ router.post('/statusCompetitor', function (req,res) {
             let temp = reply[1];
             let temp_obj = JSON.parse(temp);
 
-
             if (_.isEmpty(temp_obj)) {
                 sendMessage.sendSucceedMessage(res, 'yes');
                 // 대전가능
-            }else{
-                sendMessage.sendSucceedMessage(res,'no');
+            } else {
+                sendMessage.sendSucceedMessage(res, 'no');
                 // 대전불가능
             }
-
         });
-
 });
-
-
-
 
 
 //-------------------* UPDATE_170125 *-------------------//
@@ -535,7 +559,6 @@ router.post('/statusCompetitor', function (req,res) {
  2. getGameValue
  - 게임 데이터 값 가져오기
  */
-
 
 
 router.get('/initGameValue', function (req, res) {
@@ -559,7 +582,7 @@ router.get('/initGameValue', function (req, res) {
             keys = Object.keys(rowData[key]);
 
             multi.select(1)
-                .hset(initGameValue(),rowData[key][keys[5]], rowData[key][keys[6]])
+                .hset(initGameValue(), rowData[key][keys[5]], rowData[key][keys[6]])
                 .exec(function (err) {
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
@@ -577,6 +600,7 @@ router.get('/initGameValue', function (req, res) {
 router.get('/getGameValue', function (req, res) {
 
     redisClient.select(1);
+
     redisClient.hgetall(initGameValue(), function (err, reply) {
 
         if (err) {
@@ -585,7 +609,7 @@ router.get('/getGameValue', function (req, res) {
         }
 
         const keys = _.keys(reply);
-        const  list = {};
+        const list = {};
 
         _.each(keys, function (key) {
             list[key] = reply[key];
@@ -595,8 +619,6 @@ router.get('/getGameValue', function (req, res) {
 
     });
 });
-
-
 
 
 //-------------------* UPDATE_170120 *-------------------//
@@ -618,7 +640,7 @@ router.get('/getGameValue', function (req, res) {
  */
 
 
-router.post('/startPause', function (req,res) {
+router.post('/startPause', function (req, res) {
 
     let id;
     let multi;
@@ -627,7 +649,7 @@ router.post('/startPause', function (req,res) {
     multi = redisClient.multi();
 
     multi.select(3)
-        .expire(userStatus(id),LOGIN_VALID_TIME)
+        .expire(userStatus(id), LOGIN_VALID_TIME)
         .exec(function (err) {
 
             if (err) {
@@ -639,7 +661,7 @@ router.post('/startPause', function (req,res) {
 });
 
 
-router.post('/startResume', function (req,res) {
+router.post('/startResume', function (req, res) {
 
     let id;
     let multi;
@@ -662,17 +684,17 @@ router.post('/startResume', function (req,res) {
             temp = JSON.parse(reply[1]);
 
 
-            if(!temp){
+            if (!temp) {
                 status = 'logout';
-            }else{
+            } else {
                 status = temp[0];
             }
 
 
-            if(status == "playing"){
-                sendMessage.sendSucceedMessage(res,'user:playing');
+            if (status == "playing") {
+                sendMessage.sendSucceedMessage(res, 'user:playing');
                 return;
-            }else{
+            } else {
 
                 const statusInfo = [];
                 statusInfo.push("login");
@@ -682,18 +704,18 @@ router.post('/startResume', function (req,res) {
                 multi.select(3)
                     .set(userStatus(id), info)
                     .exec(function (err) {
-                        if(err){
+                        if (err) {
                             sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                             return;
                         }
-                        sendMessage.sendSucceedMessage(res,'user:login');
+                        sendMessage.sendSucceedMessage(res, 'user:login');
                     });
             }
         });
 });
 
 
-router.post('/startExit', function (req,res) {
+router.post('/startExit', function (req, res) {
 
 
     let id;
@@ -715,7 +737,6 @@ router.post('/startExit', function (req,res) {
 });
 
 
-
 //-------------------* 161210 *-------------------//
 
 
@@ -734,7 +755,6 @@ router.post('/startExit', function (req,res) {
  */
 
 
-
 router.post('/purchaseItemWithCoin', function (req, res) {
 
 
@@ -749,7 +769,7 @@ router.post('/purchaseItemWithCoin', function (req, res) {
         return;
     }
 
-    if(item == slogan  ){
+    if (item == slogan) {
 
         multi.select(0)
             .hset(getUserInfo(id), getFieldHasSlogan(), 1)
@@ -762,7 +782,7 @@ router.post('/purchaseItemWithCoin', function (req, res) {
                 }
                 setUserLogining.setUserLogining(res, id, 'succeed');
             });
-    }else{
+    } else {
 
         multi.select(0)
             .sadd(getUserBalloonList(id), item)
@@ -808,18 +828,20 @@ router.get('/getNoticeUpdate', function (req, res) {
             return;
         }
 
-        const  noticeList = [];
+        const noticeList = [];
         const notices = _.keys(reply);
 
         _.each(notices, function (notices_index) {
-            const info = notices_index+":"+reply[notices_index];
+            const info = notices_index + ":" + reply[notices_index];
             noticeList.push(info);
         });
 
-        let lastNum = noticeList.length-1;
+        let lastNum = noticeList.length - 1;
         let send_notice = noticeList[lastNum];
 
-        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, send_notice);
+        // sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, send_notice);
+        sendMessage.sendSucceedNotice(res, send_notice);
+
     });
 });
 
@@ -847,7 +869,7 @@ router.get('/initFandomStar', function (req, res) {
 
 
             multi.select(0)
-                .hset(getFandomStar(),rowData[key][keys[5]], rowData[key][keys[4]])
+                .hset(getFandomStar(), rowData[key][keys[5]], rowData[key][keys[4]])
                 .exec(function (err) {
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
@@ -867,7 +889,7 @@ router.get('/fandomBaseInfo01', function (req, res) {
 
     let datas = [];
     let fandomBaseInfos = [];
-    let multi = redisClient.multi();
+    const multi = redisClient.multi();
 
 
     multi.select(0)
@@ -880,9 +902,9 @@ router.get('/fandomBaseInfo01', function (req, res) {
 
 
             let fandomRankList = rep[1];
-            const multi = redisClient.multi();
-            multi.select(0);
+            // const multi = redisClient.multi();
 
+            multi.select(0);
 
             for (let i = 0; i < fandomRankList.length; i = i + 2) {
 
@@ -911,19 +933,23 @@ router.get('/fandomBaseInfo01', function (req, res) {
                     return;
                 }
 
+
                 for (let i = 0; i < datas.length; i++) {
 
 
                     const fandomBaseData = datas[i];
-                    const i01 = 3*i + 1;
+                    const i01 = 3 * i + 1;
                     const i02 = i01 + 1;
                     const i03 = i01 + 2;
 
                     fandomBaseData[getFieldUserNumber()] = reply[i01];
                     let firstBalloon = reply[i02];
+
                     fandomBaseData[getFieldBalloonFirstColor()] = firstBalloon[0];
                     let star = "star";
                     fandomBaseData[star] = reply[i03];
+
+
                     fandomBaseInfos.push(fandomBaseData);
 
                 }
@@ -933,8 +959,6 @@ router.get('/fandomBaseInfo01', function (req, res) {
             });
         });
 });
-
-
 
 
 ///////////////////////// 윤태린 /////////////////////////
@@ -963,7 +987,6 @@ function getUserMatchedList(userId) {
 }
 
 
-
 /*
 
  1. initFandomUserNumber
@@ -983,8 +1006,6 @@ function getUserMatchedList(userId) {
  - 배경화면 색상 초기화
 
  */
-
-
 
 
 router.get('/initFandomUserNumber', function (req, res) {
@@ -1013,7 +1034,6 @@ router.get('/initFandomUserNumber', function (req, res) {
         sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
     });
 });
-
 
 
 router.get('/initBalloonColorList', function (req, res) {
@@ -1079,7 +1099,6 @@ router.get('/initShopBalloon', function (req, res) {
 });
 
 
-
 router.get('/initFandomBalloonRank', function (req, res) {
     const multi = redisClient.multi();
     multi.select(0)
@@ -1114,11 +1133,8 @@ router.get('/initFandomBalloonRank', function (req, res) {
 });
 
 
-
-
-
-
 router.get('/initFandomRank', function (req, res) {
+
     const multi = redisClient.multi();
     multi.select(0)
         .zrange(getFandomUserNumber(), 0, -1)
@@ -1127,6 +1143,7 @@ router.get('/initFandomRank', function (req, res) {
                 sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                 return;
             }
+
 
             let allFandomList = reply[1];
 
@@ -1147,7 +1164,6 @@ router.get('/initFandomRank', function (req, res) {
             });
         });
 });
-
 
 
 router.get('/initNotice', function (req, res) {
@@ -1195,9 +1211,6 @@ router.get('/initBackground', function (req, res) {
         });
     });
 });
-
-
-
 
 
 /*--------------------------------- 초기화 ---------------------------------*/
@@ -1307,10 +1320,6 @@ router.post('/join', function (req, res) {
 });
 
 
-
-
-
-
 router.get('/fandomUserNumberRank', function (req, res) {
     const multi = redisClient.multi();
     multi.select(0)
@@ -1333,13 +1342,13 @@ router.get('/fandomUserNumberRank', function (req, res) {
 });
 
 
-
-
 router.post('/joinFandom', function (req, res) {
+
 
     const id = req.body.id;
     const fandomName = req.body.fandomName;
     const selectedBalloonColor = req.body.selectedBalloonColor;
+
     let userLevel = 1;
     const statusInfo = [];
 
@@ -1347,7 +1356,6 @@ router.post('/joinFandom', function (req, res) {
     statusInfo.push("login");
     statusInfo.push(current_time());
     info = JSON.stringify(statusInfo);
-
 
 
     if (!id || !fandomName || !selectedBalloonColor) {
@@ -1369,6 +1377,7 @@ router.post('/joinFandom', function (req, res) {
             let fandomRank = allFandomNumber - replies[2];
             let userFandomRankRatio = fandomRank / allFandomNumber;
 
+
             // var multi = redisClient.multi();
             multi.select(1)
                 .hgetall(getGameLevelRatio())
@@ -1380,8 +1389,9 @@ router.post('/joinFandom', function (req, res) {
 
                     let allLevelRatio = reply[1];
 
-                    if (fandomRank == 0) {
+                    1
 
+                    if (fandomRank == 0) {
                     }
 
                     for (let i = 5; i > 0; i--) {
@@ -1451,13 +1461,8 @@ router.post('/login', function (req, res) {
             setUserLogining.setUserLogining(res, id, 'loginSucceed');
         });
 
-
-
     });
 });
-
-
-
 
 
 router.post('/loginSucceed', function (req, res) {
@@ -1551,6 +1556,7 @@ router.get('/fandomBaseInfo', function (req, res) {
 
 
 router.get('/balloonColorList', function (req, res) {
+
     redisClient.select(0);
     redisClient.zrange(getBalloonColor(), 0, -1, function (err, balloons) {
         if (err) {
@@ -1561,9 +1567,6 @@ router.get('/balloonColorList', function (req, res) {
         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, balloons);
     });
 });
-
-
-
 
 
 /*
@@ -1594,7 +1597,6 @@ router.get('/balloonColorList', function (req, res) {
  - 슬로건 문구 및 url 변경
 
  */
-
 
 
 router.get('/shopList', function (req, res) {
@@ -1726,8 +1728,6 @@ router.post('/userBalloonList', function (req, res) {
 });
 
 
-
-
 router.post('/userInfo', function (req, res) {
 
     const id = req.body.id;
@@ -1753,17 +1753,18 @@ router.post('/userInfo', function (req, res) {
 });
 
 
-
 router.post('/main', function (req, res) {
 
     const id = req.body.id;
+    const multi = redisClient.multi();
+
 
     if (!id) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
-    const multi = redisClient.multi();
+
     multi.select(1);
 
     for (let i = 0; i < GAME_BOARD; i++)
@@ -1817,12 +1818,10 @@ router.post('/settingSlogan', function (req, res) {
     const sloganText = req.body.text;
     const url = req.body.url;
 
-    if (!id|| !sloganText || !url) {
+    if (!id || !sloganText || !url) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
-
-
 
 
     redisClient.select(0);
@@ -1844,8 +1843,6 @@ router.post('/settingSlogan', function (req, res) {
         }
     });
 });
-
-
 
 
 /*
@@ -1875,7 +1872,6 @@ router.post('/settingSlogan', function (req, res) {
  */
 
 
-
 router.post('/purchaseBalloon', function (req, res) {
 
 
@@ -1903,11 +1899,6 @@ router.post('/purchaseBalloon', function (req, res) {
 });
 
 
-
-
-
-
-
 router.get('/getNotice', function (req, res) {
     redisClient.select(0);
     redisClient.get(getNotice(), function (err, notice) {
@@ -1925,7 +1916,6 @@ router.post('/delUser', function (req, res) {
 
 
     const id = req.body.id;
-
 
 
     if (!id) {
@@ -1979,8 +1969,6 @@ router.post('/delUser', function (req, res) {
         });
     });
 });
-
-
 
 
 router.post('/setProfile', function (req, res) {
@@ -2059,7 +2047,6 @@ router.get('/balloon/rgb', function (req, res) {
         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, colorData);
     });
 });
-
 
 
 module.exports = router;

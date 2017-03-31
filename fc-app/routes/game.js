@@ -3,9 +3,11 @@ const redis = require('redis');
 const moment = require('moment');
 const _ = require('underscore');
 const __ = require('lodash');
-
 const GoogleSpreadsheet = require("google-spreadsheet");
+
+
 const redisClient = redis.createClient(6379, 'fc-redis');
+// const redisClient = redis.createClient(6379, '127.0.0.1');
 
 const router = express.Router();
 const gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
@@ -55,22 +57,22 @@ const sendMessage = new SendMessage();
 function SendMessage() {
     addMethod(this, "sendSucceedMessage", function (res, succeedCode) {
         res.send({succeedCode: succeedCode});
-        console.log({succeedCode: succeedCode});
+        // console.log({succeedCode: succeedCode});
     });
 
     addMethod(this, "sendSucceedMessage", function (res, succeedCode, sendData) {
         res.send({succeedCode: succeedCode, data: sendData});
-        console.log({succeedCode: succeedCode, data: JSON.stringify(sendData)});
+        // console.log({succeedCode: succeedCode, data: JSON.stringify(sendData)});
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode, err) {
         res.send({errorCode: errorCode, errorMessage: message[errorCode]});
-        console.log({errorCode: errorCode, errorMessage: message[errorCode], error: err});
+        // console.log({errorCode: errorCode, errorMessage: message[errorCode], error: err});
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode) {
         res.send({errorCode: errorCode, errorMessage: message[errorCode]});
-        console.log({errorCode: errorCode, errorMessage: message[errorCode]});
+        // console.log({errorCode: errorCode, errorMessage: message[errorCode]});
     });
 }
 
@@ -81,8 +83,7 @@ function SetUserLogining() {
 
     addMethod(this, "setUserLogining", function (res, userId, protocol) {
 
-
-        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, 'if settingDefenseMode, ok and else GameOver, usr: login competitorId: logout ');
+        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, '[settingDefenseMode] ok , [GameOver] usr: login competitorId: logout ');
 
     });
 
@@ -314,7 +315,43 @@ function recordBattle(id) {
 
 
 
+//-------------------* UPDATE_170329 *-------------------//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
 //-------------------* UPDATE_170313~15 *-------------------//
+
+
+
+/*
+
+ 1. time_format
+ - 방어기록 시간 포맷
+
+ */
+
 
 
 
@@ -530,6 +567,11 @@ router.post('/userMatchedList', function (req, res) {
 
 
 
+
+
+
+
+
                     matchedUserInfos.forEach(function (info, index) {
 
 
@@ -602,6 +644,7 @@ router.post('/userMatchedList', function (req, res) {
 
 
                     multi.exec(function (err, isExists) {
+
 
 
                         if (err) {
@@ -782,10 +825,6 @@ router.post('/startLogin', function (req, res) {
         const enemy_id = String(match_id[0]);
 
 
-
-
-
-
         multi.select(3)
             .get(userStatus(enemy_id))
             .exec(function (err, reply) {
@@ -854,7 +893,6 @@ router.post('/startLogin', function (req, res) {
                             sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
 
                         }else {
-
 
 
                             if(flag_playing){
@@ -1347,6 +1385,7 @@ const searchCompetitorId = function (fandomExistingUserList, count, callback) {
                         const time = moment().format('YYYY.MM.DD HH:mm');
                         let status = "[\"playing\",\"" + time + "\"]";
 
+                        // let multi_sec = redisClient.multi();
 
 
                         multi.select(3)
@@ -1370,8 +1409,6 @@ const searchCompetitorId = function (fandomExistingUserList, count, callback) {
 
 
 const getCompetitorUserInfo = function (competitorId, callback) {
-
-
 
 
 
@@ -1439,6 +1476,8 @@ const getCompetitorUserInfo = function (competitorId, callback) {
 
 
 
+
+
 router.post('/gameOver', function (req, res) {
 
 
@@ -1447,14 +1486,17 @@ router.post('/gameOver', function (req, res) {
     const userGetStarCount = req.body.userGetStarCount;
     const userCoinCount = req.body.userCoinCount;
     const userGetBalloonCount = req.body.userGetBalloonCount;
-
     const competitorId = req.body.competitorId;
     const competitorGameInfo = req.body.competitorGameInfo;
+
+
+
     const multi = redisClient.multi();
     let statusInfo = [];
     let recBattle= [];
     let info;
     let info_battle;
+    let userLevel;
 
 
 
@@ -1466,7 +1508,6 @@ router.post('/gameOver', function (req, res) {
 
 
 
-
     statusInfo.push("login");
     statusInfo.push(current_time());
     info = JSON.stringify(statusInfo);
@@ -1474,6 +1515,7 @@ router.post('/gameOver', function (req, res) {
     recBattle.push(competitorId);
     recBattle.push(current_time());
     info_battle = JSON.stringify(recBattle);
+
 
 
     multi.select(0)
@@ -1507,7 +1549,6 @@ router.post('/gameOver', function (req, res) {
                 );
 
 
-
             multi.exec(function (err) {
                 if (err) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -1516,8 +1557,11 @@ router.post('/gameOver', function (req, res) {
 
                 setUserLogining.setUserLogining(res, userId, 'gameover');
             });
+
         });
 });
+
+
 
 
 
@@ -1600,6 +1644,12 @@ router.post('/gameMatch', function (req, res) {
         });
     });
 });
+
+
+
+
+
+
 
 
 
