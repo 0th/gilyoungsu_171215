@@ -9,7 +9,8 @@ services:
       - "6379:6379"
     volumes:
       - ./redis:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass gilyoungsu
+
 
   fc-app:
     restart: always
