@@ -10,6 +10,7 @@ services:
     volumes:
       - ./redis:/data
     command: redis-server --appendonly yes
+    
 
   fc-app:
     restart: always
