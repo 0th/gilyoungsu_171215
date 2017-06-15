@@ -1,4 +1,3 @@
-
 const express = require('express');
 const redis = require('redis');
 const moment = require('moment');
@@ -6,12 +5,13 @@ const GoogleSpreadSheet = require("google-spreadsheet");
 
 
 const redisClient = redis.createClient(6379, 'fc-redis');
-// const redisClient = redis.createClient(6379, 'localhost');
+// const redisClient = redis.createClient(6379, '127.0.0.1');
 
 
 const router = express.Router();
 const _ = require('underscore');
 const fs = require('fs');
+
 
 const fandomListSheet = new GoogleSpreadSheet('1Irm2tSKZAZtYiIY69nJQzrCDdu2p760BjBQZuYqH5vQ');
 const balloonColorListSheet = new GoogleSpreadSheet('1vTJGuUxxxrvLP_01izehPxKME_6nTRj61YHCGcmXsNs');
@@ -19,18 +19,14 @@ const balloonShopListSheet = new GoogleSpreadSheet('1eu3ufiAguhojmI0dSkSG0bySoNd
 const noticeSheet = new GoogleSpreadSheet('1fSC13hjAqYxjr9mFDoDSf7ZvkpOl2dUiOid7bqf2Ft4');
 const backgroundSheet = new GoogleSpreadSheet('1_AT0C1__Dt67lR4IiBYQxuGrCKUikR_kCy4b2lU05WQ');
 const fdcValueSheet = new GoogleSpreadSheet('1T1ng3UyTx20JAyZigDihk1YATyrED9aC9ioZOcoG-Lk');
-
-const gameLevelRatioSheet = new GoogleSpreadSheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
-const hasStarByLevelSheet = new GoogleSpreadSheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
-
-
-
 const logger = require('../functions/logger');
 
 
-
 const LOGIN_VALID_TIME = 60;
+
+
 const GAME_BOARD = 36;
+
 const ERROR_SHEET = 101;
 const ERROR_DATABASE = 202;
 const ERROR_ID_REPEATED = 303;
@@ -65,7 +61,6 @@ message[ERROR_LOGINED] = "이미 로그인 되어있는 사용자 입니다";
 message[ERROR_NOT_EXIST_USER] = "유저가 존재하지 않습니다";
 
 
-
 // 클래스 인스턴스 > 함수 > 함수 내용 : 이렇게 차례대로 분류해서 사용하는 거였음
 
 
@@ -80,35 +75,33 @@ function addMethod(object, functionName, func) {
 }
 
 
-
 function SendMessage() {
 
     addMethod(this, "sendSucceedNotice", function (res, succeedCode) {
         res.send({data: succeedCode});
-        console.log({data: succeedCode});
+        // console.log({data: succeedCode});
     });
 
     addMethod(this, "sendSucceedMessage", function (res, succeedCode) {
         res.send({succeedCode: succeedCode});
-        console.log({succeedCode: succeedCode});
+        // console.log({succeedCode: succeedCode});
     });
 
     addMethod(this, "sendSucceedMessage", function (res, succeedCode, sendData) {
         res.send({succeedCode: succeedCode, data: sendData});
-        console.log({succeedCode: succeedCode, data: sendData})
+        // console.log({succeedCode: succeedCode, data: sendData})
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode, err) {
         res.send({errorCode: errorCode, errorMessage: message[errorCode]});
-        console.log({errorCode: errorCode, errorMessage: message[errorCode], error: err});
+        // console.log({errorCode: errorCode, errorMessage: message[errorCode], error: err});
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode) {
         res.send({errorCode: errorCode, errorMessage: message[errorCode]});
-        console.log({errorCode: errorCode, errorMessage: message[errorCode]});
+        // console.log({errorCode: errorCode, errorMessage: message[errorCode]});
     });
 }
-
 
 
 const sendMessage = new SendMessage();
@@ -224,18 +217,10 @@ function getFieldSelectedBalloonShape() {
 }
 
 
-
-
-
-
-
 ///////////////////////// GILVERT /////////////////////////
 
 
-
-
 //------------------------* 공통 *------------------------//
-
 
 
 const noticeUpdateSheet = new GoogleSpreadSheet('1a_HkK-e4t6hCG8mmIp-JJEtsuPTeTF0VXX1pqFQMcTU');
@@ -245,7 +230,7 @@ function getNoticeUpdate() {
     return 'notice:update';
 }
 
-function  current_time() {
+function current_time() {
     let time;
     time = moment().format('YYYY.MM.DD HH:mm');
     return time;
@@ -257,7 +242,7 @@ function initGameValue() {
 }
 
 function userStatus(userid) {
-    return 'status:'+ userid;
+    return 'status:' + userid;
 }
 
 function getFieldCoinCount() {
@@ -269,831 +254,13 @@ function getFandomStar() {
 }
 
 
-
 function recordBattle(id) {
-    return 'battle:'+id;
+    return 'battle:' + id;
 }
 
 
 
-
-
-
-/////////////////////////////////////////////////////////////////////////
-
-//-------------------* UPDATE_170614 *-------------------//
-
-
-
-
-/*
-
- #1. API
-
- 1. initFandomUserNumber - 팬덤별 유저 수 초기화
- 2. initBalloonColorList - 풍선 색상 초기화
- 3. initShopBalloon - 상점 풍선 목록 초기화
- 4. initNotice -공지사항 초기화
- 5. initBackground - 배경 색상 초기화
- 6. initNoticeUpdate - 업데이트 공지
- 7. initFandomStar - 스타명
- 8. initGameValue - 팬덤컵 기본값 초기화
- 9. initLevelRatio - 팬덤 레벨 설정시 비율 초기화
- 10. initHasStarByLevel - 레벨별 소유 별 갯수 초기화
- 11. [의존] initFandomBalloonRank - 팬덤별 풍선 랭킹 초기화
- 12. [의존] initFandomRank - 팬덤 랭킹 초기화
-
- */
-
-
-
-
-let async = require('async');
-let initfdc_count =0;
-
-function getHasStarByLevel() {
-    return 'hasStarByLevel';
-}
-
-
-router.get('/initfdc', function (req, res) {
-
-
-    async.waterfall([
-
-            function (callback) {
-                ++initfdc_count;
-
-
-                fandomListSheet.getRows(1, function (err, rowData) {
-
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-
-                    rowKeys.forEach(function (key) {
-
-                        const keys = Object.keys(rowData[key]);
-                        const multi = redisClient.multi();
-                        multi.select(0)
-                            .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]].trim())
-                            .exec(function (err) {
-                                if (err) {
-                                    callback(null, ERROR_DATABASE);
-                                }
-                            });
-                    });
-                    callback(null, '1. 팬덤별 유저 수 초기화');
-                });
-            },
-
-            function(arg1, callback) {
-                ++initfdc_count;
-
-                const balloonColorSheetNum = 1;
-                balloonColorListSheet.getRows(balloonColorSheetNum, function (err, rowData) {
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-                    }
-
-                    const multi = redisClient.multi();
-                    multi.select(0);
-
-                    rowData.forEach(function (row, index) {
-                        multi.zadd(getBalloonColor(), index, row.color.trim());
-
-                        const rgb = row.r + '-' + row.g + '-' + row.b;
-                        multi.hset(getBalloonColorRGB(), row.color.trim(), rgb);
-                    });
-
-                    multi.exec(function (err) {
-                        if (err) {
-                            callback(null, ERROR_DATABASE);
-                        }
-                        callback(null, '2.풍선 색상 초기화');
-                    });
-                });
-
-            },
-
-            function(arga, callback) {
-                ++initfdc_count;
-
-                const balloonItemSheet = 1;
-                balloonShopListSheet.getRows(balloonItemSheet, function (err, rowData) {
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-                    const multi = redisClient.multi();
-                    multi.select(0);
-
-                    rowKeys.forEach(function (key) {
-                        if (key < 1) {
-                            return;
-                        }
-
-                        const keys = Object.keys(rowData[key]);
-                        multi.hset(getShopBalloon(), rowData[key][keys[3]], rowData[key][keys[4]]);
-                    });
-
-                    multi.exec(function (err) {
-                        if (err) {
-                            callback(null, ERROR_DATABASE);
-                        }
-                        callback(null, '3. 상점 풍선 목록 초기화');
-
-                    });
-                });
-            },
-
-            function(arg1, callback){
-                ++initfdc_count;
-
-
-                noticeSheet.getRows(1, function (err, rowData) {
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-
-                    }
-                    const data = rowData[0];
-                    redisClient.select(0);
-                    redisClient.set(getNotice(), data.notice, function (err) {
-                        if (err) {
-                            callback(null, ERROR_DATABASE);
-                        }
-
-                        callback(null, '4. 공지사항 초기화 ');
-                    });
-                });
-            },
-
-            function (arg1, callback) {
-                ++initfdc_count;
-
-
-                backgroundSheet.getRows(1, function (err, row) {
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-                    }
-
-                    const multi = redisClient.multi();
-                    multi.select(0);
-
-                    _.each(row, function (each) {
-                        const rgb = each.r + '-' + each.g + '-' + each.b;
-                        multi.hset(getBackground(), each.filename, rgb);
-                    });
-
-                    multi.exec(function (err) {
-                        if (err) {
-                            callback(null, ERROR_DATABASE);
-                        }
-                        callback(null, '5. 배경 색상 초기화 ');
-                    });
-                });
-            },
-
-            function (arg1, callback) {
-                ++initfdc_count;
-
-
-                noticeUpdateSheet.getRows(1, function (err, rowData) {
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-                    }
-                    const data = rowData[0];
-                    redisClient.select(0);
-                    redisClient.hset(getNoticeUpdate(), data.ver, data.notice, function (err) {
-
-                        if (err) {
-                            callback(null, ERROR_DATABASE);
-                        }
-                        callback(null, '6. 업데이트 공지');
-                    });
-                });
-            },
-
-            function (arg1, callback) {
-                ++initfdc_count;
-
-
-                fandomListSheet.getRows(1, function (err, rowData) {
-
-
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-
-                    rowKeys.forEach(function (key) {
-
-                        const keys = Object.keys(rowData[key]);
-                        const multi = redisClient.multi();
-
-                        multi.select(0)
-                            .hset(getFandomStar(),rowData[key][keys[5]], rowData[key][keys[4]])
-                            .exec(function (err) {
-                                if (err) {
-                                    callback(null, ERROR_DATABASE);
-                                }
-
-                            });
-                    });
-
-                    callback(null, '7. 스타명');
-                });
-
-            },
-
-            function (arg1, callback) {
-                ++initfdc_count;
-
-
-                fdcValueSheet.getRows(1, function (err, rowData) {
-
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-                    }
-
-
-                    let keys;
-                    let rowKeys;
-                    let multi;
-
-                    rowKeys = Object.keys(rowData);
-                    multi = redisClient.multi();
-
-                    rowKeys.forEach(function (key) {
-
-                        keys = Object.keys(rowData[key]);
-
-                        multi.select(1)
-                            .hset(initGameValue(),rowData[key][keys[5]], rowData[key][keys[6]])
-                            .exec(function (err) {
-                                if (err) {
-                                    callback(null, ERROR_DATABASE);
-                                }
-                            });
-                    });
-
-                    callback(null, '8. 팬덤컵 기본값 초기화');
-
-                });
-            },
-
-            function(arg1, callback){
-                ++initfdc_count;
-
-                gameLevelRatioSheet.getRows(1, function (err, rowData) {
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-
-                    rowKeys.forEach(function (key) {
-                        const keys = Object.keys(rowData[key]);
-
-                        const multi = redisClient.multi();
-                        multi.select(1)
-                            .hset(getGameLevelRatio(), rowData[key][keys[3]], rowData[key][keys[4]])
-                            .exec(function (err) {
-                                if (err) {
-                                    callback(null, ERROR_DATABASE);
-
-                                }
-                            });
-                    });
-
-                    callback(null, '9. 팬덤 레벨 설정시 비율 초기화');
-                });
-
-            },
-
-            function (arg1, callback) {
-                ++initfdc_count;
-
-
-                hasStarByLevelSheet.getRows(1, function (err, rowData) {
-
-                    if (err) {
-                        callback(null, ERROR_SHEET);
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-
-                    rowKeys.forEach(function (key) {
-                        const keys = Object.keys(rowData[key]);
-
-                        const multi = redisClient.multi();
-                        multi.select(1)
-                            .hset(getHasStarByLevel(), rowData[key][keys[3]], rowData[key][keys[4]])
-                            .exec(function (err) {
-                                if (err) {
-                                    callback(null, ERROR_DATABASE);
-                                }
-                            });
-                    });
-                    callback(null, '10. 레벨별 소유 별 갯수 초기화');
-                });
-
-            },
-
-            function (arg1, callback) {
-                ++initfdc_count;
-
-                const multi = redisClient.multi();
-                multi.select(0)
-                    .zrange(getFandomUserNumber(), 0, -1)
-                    .zrange(getBalloonColor(), 0, -1)
-                    .exec(function (err, replies) {
-                        if (err) {
-                            callback(null, ERROR_SHEET);
-                        }
-
-                        let allFandomList = replies[1];
-                        let allBalloonColorList = replies[2];
-
-                        multi.select(0);
-
-                        _.map(allFandomList, function (eachFandomName) {
-                            _.map(allBalloonColorList, function (eachColor) {
-                                multi.zadd(getFandomBalloonRank(eachFandomName), 0, eachColor);
-                            });
-                        });
-
-                        multi.exec(function (err) {
-                            if (err) {
-                                callback(null, ERROR_DATABASE);
-
-                            }
-                            callback(null, '1. 팬덤별 풍선 랭킹 초기화');
-                        });
-                    });
-            },
-
-            function (arg1, callback) {
-                ++initfdc_count;
-
-
-                const multi = redisClient.multi();
-                multi.select(0)
-                    .zrange(getFandomUserNumber(), 0, -1)
-                    .exec(function (err, reply) {
-                        if (err) {
-                            callback(null, ERROR_SHEET);
-
-                        }
-
-
-                        let allFandomList = reply[1];
-
-                        multi.select(0);
-
-                        _.map(allFandomList, function (eachFandom) {
-                            multi.zadd(getFandomRank(), 0, eachFandom);
-                        });
-
-                        multi.exec(function (err) {
-                            if (err) {
-                                callback(null, ERROR_DATABASE);
-
-                            }
-
-                            callback(null, '2. 팬덤 랭킹 초기화');
-                        });
-                    });
-            }
-        ],
-
-        function(err,results){
-
-            let end_results = initfdc_count +' 번 카운트 : '+ results;
-
-            if(err) {
-                console.log(err);
-            }
-
-            sendMessage.sendSucceedMessage(res, end_results);
-        }
-
-    );
-
-});
-
-
-router.get('/initfdc1', function (req, res) {
-
-
-
-    async.parallel([
-
-            function (callback) {
-
-                fandomListSheet.getRows(1, function (err, rowData) {
-
-                    if (err) {
-
-                        // sendMessage.sendErrorMessage(res, ERROR_SHEET, err);
-                        // return;
-                        callback(ERROR_SHEET);
-
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-
-                    rowKeys.forEach(function (key) {
-
-                        const keys = Object.keys(rowData[key]);
-                        const multi = redisClient.multi();
-                        multi.select(0)
-                            .zadd(getFandomUserNumber(), 0, rowData[key][keys[5]].trim())
-                            .exec(function (err) {
-                                if (err) {
-
-                                    // sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                                    // return;
-                                    callback(ERROR_DATABASE);
-
-                                }
-                            });
-                    });
-                    // sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
-                    // return;
-                    callback('1. 팬덤별 유저 수 초기화');
-                });
-            },
-
-            function(callback) {
-                const balloonColorSheetNum = 1;
-                balloonColorListSheet.getRows(balloonColorSheetNum, function (err, rowData) {
-                    if (err) {
-                        // callback('에러');
-                        // return;
-                        callback(ERROR_SHEET);
-
-                    }
-
-                    const multi = redisClient.multi();
-                    multi.select(0);
-
-                    rowData.forEach(function (row, index) {
-                        multi.zadd(getBalloonColor(), index, row.color.trim());
-
-                        const rgb = row.r + '-' + row.g + '-' + row.b;
-                        multi.hset(getBalloonColorRGB(), row.color.trim(), rgb);
-                    });
-
-                    multi.exec(function (err) {
-                        if (err) {
-                            // callback('ERROR_DATABASE = 202');
-                            // return;
-                            callback(ERROR_DATABASE);
-
-                        }
-                        callback('2.풍선 색상 초기화');
-                    });
-                });
-
-            },
-
-            function(callback) {
-                const balloonItemSheet = 1;
-                balloonShopListSheet.getRows(balloonItemSheet, function (err, rowData) {
-                    if (err) {
-                        callback(ERROR_SHEET);
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-                    const multi = redisClient.multi();
-                    multi.select(0);
-
-                    rowKeys.forEach(function (key) {
-                        if (key < 1) {
-                            return;
-                        }
-
-                        const keys = Object.keys(rowData[key]);
-                        multi.hset(getShopBalloon(), rowData[key][keys[3]], rowData[key][keys[4]]);
-                    });
-
-                    multi.exec(function (err) {
-                        if (err) {
-                            callback(ERROR_DATABASE);
-                        }
-                        callback('3. 상점 풍선 목록 초기화');
-
-                    });
-                });
-            },
-
-            function(callback){
-
-                noticeSheet.getRows(1, function (err, rowData) {
-                    if (err) {
-                        callback(ERROR_SHEET);
-
-                    }
-                    const data = rowData[0];
-                    redisClient.select(0);
-                    redisClient.set(getNotice(), data.notice, function (err) {
-                        if (err) {
-                            callback(ERROR_DATABASE);
-                        }
-
-                        callback('4. 공지사항 초기화 ');
-                    });
-                });
-            },
-
-
-
-            function (callback) {
-
-                backgroundSheet.getRows(1, function (err, row) {
-                    if (err) {
-                        callback(ERROR_SHEET);
-                    }
-
-                    const multi = redisClient.multi();
-                    multi.select(0);
-
-                    _.each(row, function (each) {
-                        const rgb = each.r + '-' + each.g + '-' + each.b;
-                        multi.hset(getBackground(), each.filename, rgb);
-                    });
-
-                    multi.exec(function (err) {
-                        if (err) {
-                            callback(ERROR_DATABASE);
-                        }
-                        callback('5. 배경 색상 초기화 ');
-                    });
-                });
-            },
-
-            function (callback) {
-
-                noticeUpdateSheet.getRows(1, function (err, rowData) {
-                    if (err) {
-                        callback(ERROR_SHEET);
-                    }
-                    const data = rowData[0];
-                    redisClient.select(0);
-                    redisClient.hset(getNoticeUpdate(), data.ver, data.notice, function (err) {
-
-                        if (err) {
-                            callback(ERROR_DATABASE);
-                        }
-                        callback('6. 업데이트 공지');
-                    });
-                });
-            },
-
-            function (callback) {
-
-
-                fandomListSheet.getRows(1, function (err, rowData) {
-
-
-                    if (err) {
-                        callback(ERROR_SHEET);
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-
-                    rowKeys.forEach(function (key) {
-
-                        const keys = Object.keys(rowData[key]);
-                        const multi = redisClient.multi();
-
-                        multi.select(0)
-                            .hset(getFandomStar(),rowData[key][keys[5]], rowData[key][keys[4]])
-                            .exec(function (err) {
-                                if (err) {
-                                    callback(ERROR_DATABASE);
-                                }
-
-                            });
-                    });
-
-                    consoleInputLog("check1");
-
-                    callback('7. 스타명');
-                });
-
-            },
-
-            function (callback) {
-
-
-                fdcValueSheet.getRows(1, function (err, rowData) {
-
-                    if (err) {
-                        callback(ERROR_SHEET);
-                    }
-
-
-                    let keys;
-                    let rowKeys;
-                    let multi;
-
-                    rowKeys = Object.keys(rowData);
-                    multi = redisClient.multi();
-
-                    rowKeys.forEach(function (key) {
-
-                        keys = Object.keys(rowData[key]);
-
-                        multi.select(1)
-                            .hset(initGameValue(),rowData[key][keys[5]], rowData[key][keys[6]])
-                            .exec(function (err) {
-                                if (err) {
-                                    callback(ERROR_DATABASE);
-                                }
-                            });
-                    });
-
-                    callback('8. 팬덤컵 기본값 초기화');
-
-                });
-            },
-
-
-
-            function(callback){
-
-                gameLevelRatioSheet.getRows(1, function (err, rowData) {
-                    if (err) {
-                        callback(ERROR_SHEET);
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-
-                    rowKeys.forEach(function (key) {
-                        const keys = Object.keys(rowData[key]);
-
-                        const multi = redisClient.multi();
-                        multi.select(1)
-                            .hset(getGameLevelRatio(), rowData[key][keys[3]], rowData[key][keys[4]])
-                            .exec(function (err) {
-                                if (err) {
-                                    callback(ERROR_DATABASE);
-
-                                }
-                            });
-                    });
-
-                    callback('9. 팬덤 레벨 설정시 비율 초기화');
-                });
-
-            },
-
-            function (callback) {
-
-
-                hasStarByLevelSheet.getRows(1, function (err, rowData) {
-
-                    if (err) {
-                        callback(ERROR_SHEET);
-                    }
-
-                    const rowKeys = Object.keys(rowData);
-
-                    rowKeys.forEach(function (key) {
-                        const keys = Object.keys(rowData[key]);
-
-                        const multi = redisClient.multi();
-                        multi.select(1)
-                            .hset(getHasStarByLevel(), rowData[key][keys[3]], rowData[key][keys[4]])
-                            .exec(function (err) {
-                                if (err) {
-                                    callback(ERROR_DATABASE);
-                                }
-                            });
-                    });
-                    callback('10. 레벨별 소유 별 갯수 초기화');
-                });
-
-            }
-
-
-        ],
-
-        //결론
-        function(err,results){
-
-            if(err) {
-                // sendMessage.sendErrorMessage(res,results,err);
-                console.log(err);
-            }
-
-            let tmp_string = results;
-
-            sendMessage.sendSucceedMessage(res, results);
-        }
-
-    );
-
-});
-
-
-router.get('/initfdc2', function (req, res) {
-
-
-    async.parallel([
-
-
-            function (callback) {
-
-                const multi = redisClient.multi();
-                multi.select(0)
-                    .zrange(getFandomUserNumber(), 0, -1)
-                    .zrange(getBalloonColor(), 0, -1)
-                    .exec(function (err, replies) {
-                        if (err) {
-                            callback(ERROR_SHEET);
-                        }
-
-                        let allFandomList = replies[1];
-                        let allBalloonColorList = replies[2];
-
-                        // var multi = redisClient.multi();
-                        multi.select(0);
-
-                        _.map(allFandomList, function (eachFandomName) {
-                            _.map(allBalloonColorList, function (eachColor) {
-                                multi.zadd(getFandomBalloonRank(eachFandomName), 0, eachColor);
-                            });
-                        });
-
-                        multi.exec(function (err) {
-                            if (err) {
-                                callback(ERROR_DATABASE);
-
-                            }
-                            callback('1. 팬덤별 풍선 랭킹 초기화');
-                        });
-                    });
-            },
-
-
-            function (callback) {
-
-
-                const multi = redisClient.multi();
-                multi.select(0)
-                    .zrange(getFandomUserNumber(), 0, -1)
-                    .exec(function (err, reply) {
-                        if (err) {
-                            callback(ERROR_SHEET);
-
-                        }
-
-
-                        let allFandomList = reply[1];
-
-                        multi.select(0);
-
-                        _.map(allFandomList, function (eachFandom) {
-                            multi.zadd(getFandomRank(), 0, eachFandom);
-                        });
-
-                        multi.exec(function (err) {
-                            if (err) {
-                                callback(ERROR_DATABASE);
-
-                            }
-
-                            callback('2. 팬덤 랭킹 초기화');
-                        });
-                    });
-
-            }
-
-
-        ],
-
-        function(err,results){
-
-            if(err) {
-                // sendMessage.sendErrorMessage(res,results,err);
-                console.log(err);
-            }
-
-            sendMessage.sendSucceedMessage(res, results);
-
-        }
-
-    );
-
-});
-
+//수정하기 전으로 다시 돌아옴
 
 
 
@@ -1110,8 +277,7 @@ router.get('/initfdc2', function (req, res) {
  */
 
 
-
-router.post('/updateLevel', function (req,res) {
+router.post('/updateLevel', function (req, res) {
 
     const userId = req.body.userId;
     const userFandomName = req.body.userFandomName;
@@ -1157,7 +323,7 @@ router.post('/updateLevel', function (req,res) {
                     }
 
                     multi.select(0)
-                        .hmset(getUserInfo(userId),'level', userLevel)
+                        .hmset(getUserInfo(userId), 'level', userLevel)
                         .exec(function (err) {
 
                             if (err) {
@@ -1175,10 +341,6 @@ router.post('/updateLevel', function (req,res) {
 });
 
 
-
-
-
-
 //-------------------* UPDATE_170316 *-------------------//
 
 
@@ -1189,7 +351,7 @@ router.post('/updateLevel', function (req,res) {
 
  */
 
-router.post('/btnBackOnGame', function (req,res) {
+router.post('/btnBackOnGame', function (req, res) {
 
     let id;
     let competitorId;
@@ -1213,11 +375,6 @@ router.post('/btnBackOnGame', function (req,res) {
 });
 
 
-
-
-
-
-
 //-------------------* UPDATE_170303 *-------------------//
 
 /*
@@ -1232,7 +389,6 @@ router.post('/btnBackOnGame', function (req,res) {
  */
 
 
-
 router.post('/settingBalloon', function (req, res) {
 
     const id = req.body.id;
@@ -1241,12 +397,10 @@ router.post('/settingBalloon', function (req, res) {
     const fandomName = req.body.fandomName;
 
 
-
     if (!id || !selectedBalloonShape || !selectedBalloonColor) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
-
 
 
     const multi = redisClient.multi();
@@ -1254,7 +408,7 @@ router.post('/settingBalloon', function (req, res) {
 
 
     multi.select(0)
-        .hget(getUserInfo(id),balloonColor)
+        .hget(getUserInfo(id), balloonColor)
         .exec(function (err, reply) {
 
 
@@ -1265,8 +419,8 @@ router.post('/settingBalloon', function (req, res) {
 
             let pre_balloonColor = reply[1];
 
-            multi.zincrby(getFandomBalloonRank(fandomName), -1, pre_balloonColor )
-                .zincrby(getFandomBalloonRank(fandomName), 1, selectedBalloonColor )
+            multi.zincrby(getFandomBalloonRank(fandomName), -1, pre_balloonColor)
+                .zincrby(getFandomBalloonRank(fandomName), 1, selectedBalloonColor)
                 .hmset(getUserInfo(id), getFieldSelectedBalloonShape(), selectedBalloonShape, getFieldSelectedBalloonColor(), selectedBalloonColor)
                 .exec(function (err) {
 
@@ -1284,18 +438,7 @@ router.post('/settingBalloon', function (req, res) {
 });
 
 
-
-
-
-
-
-
-
-
-
-
 //-------------------* UPDATE_170222 *-------------------//
-
 
 
 /*
@@ -1306,8 +449,7 @@ router.post('/settingBalloon', function (req, res) {
  */
 
 
-
-router.get('/delTrashUser', function (req,res) {
+router.get('/delTrashUser', function (req, res) {
 
 
     const multi = redisClient.multi();
@@ -1327,27 +469,24 @@ router.get('/delTrashUser', function (req,res) {
             let rec_reply;
 
 
-
-
             _.each(keys_id, function (id) {
 
 
-                let count =0;
+                let count = 0;
 
 
                 multi.get(id)
                     .exec(function (err, reply) {
 
 
-                        if(err){
+                        if (err) {
                             sendMessage.sendErrorMessage(res, err);
                         }
 
-                        rec_reply =JSON.parse(reply[count]);
+                        rec_reply = JSON.parse(reply[count]);
 
 
-
-                        if(rec_reply[0]=='login') {
+                        if (rec_reply[0] == 'login') {
 
                             const pre_time = rec_reply[1];
                             const current_time = moment().format('YYYY.MM.DD HH:mm');
@@ -1371,37 +510,14 @@ router.get('/delTrashUser', function (req,res) {
                     });
 
 
-
             });
 
-            sendMessage.sendSucceedMessage(res,'succeed');
+            sendMessage.sendSucceedMessage(res, 'succeed');
 
 
         });
 
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 //-------------------* UPDATE_170213 *-------------------//
@@ -1414,15 +530,12 @@ router.get('/delTrashUser', function (req,res) {
  - 존재하면 대전 불가능 존재하지 않으면 대전 가능
  */
 
-router.post('/statusCompetitor', function (req,res) {
-
-
+router.post('/statusCompetitor', function (req, res) {
     let competitorId;
     let multi;
 
     competitorId = req.body.competitorId;
     multi = redisClient.multi();
-
     multi.select(3)
         .get(userStatus(competitorId))
         .exec(function (err, reply) {
@@ -1434,21 +547,15 @@ router.post('/statusCompetitor', function (req,res) {
             let temp = reply[1];
             let temp_obj = JSON.parse(temp);
 
-
             if (_.isEmpty(temp_obj)) {
                 sendMessage.sendSucceedMessage(res, 'yes');
                 // 대전가능
-            }else{
-                sendMessage.sendSucceedMessage(res,'no');
+            } else {
+                sendMessage.sendSucceedMessage(res, 'no');
                 // 대전불가능
             }
-
         });
-
 });
-
-
-
 
 
 //-------------------* UPDATE_170125 *-------------------//
@@ -1459,7 +566,6 @@ router.post('/statusCompetitor', function (req,res) {
  2. getGameValue
  - 게임 데이터 값 가져오기
  */
-
 
 
 router.get('/initGameValue', function (req, res) {
@@ -1483,7 +589,7 @@ router.get('/initGameValue', function (req, res) {
             keys = Object.keys(rowData[key]);
 
             multi.select(1)
-                .hset(initGameValue(),rowData[key][keys[5]], rowData[key][keys[6]])
+                .hset(initGameValue(), rowData[key][keys[5]], rowData[key][keys[6]])
                 .exec(function (err) {
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
@@ -1510,7 +616,7 @@ router.get('/getGameValue', function (req, res) {
         }
 
         const keys = _.keys(reply);
-        const  list = {};
+        const list = {};
 
         _.each(keys, function (key) {
             list[key] = reply[key];
@@ -1520,8 +626,6 @@ router.get('/getGameValue', function (req, res) {
 
     });
 });
-
-
 
 
 //-------------------* UPDATE_170120 *-------------------//
@@ -1543,7 +647,7 @@ router.get('/getGameValue', function (req, res) {
  */
 
 
-router.post('/startPause', function (req,res) {
+router.post('/startPause', function (req, res) {
 
     let id;
     let multi;
@@ -1552,7 +656,7 @@ router.post('/startPause', function (req,res) {
     multi = redisClient.multi();
 
     multi.select(3)
-        .expire(userStatus(id),LOGIN_VALID_TIME)
+        .expire(userStatus(id), LOGIN_VALID_TIME)
         .exec(function (err) {
 
             if (err) {
@@ -1564,7 +668,7 @@ router.post('/startPause', function (req,res) {
 });
 
 
-router.post('/startResume', function (req,res) {
+router.post('/startResume', function (req, res) {
 
     let id;
     let multi;
@@ -1587,20 +691,17 @@ router.post('/startResume', function (req,res) {
             temp = JSON.parse(reply[1]);
 
 
-
-            if(!temp){
+            if (!temp) {
                 status = 'logout';
-            }else{
+            } else {
                 status = temp[0];
             }
 
 
-
-
-            if(status == "playing"){
-                sendMessage.sendSucceedMessage(res,'user:playing');
+            if (status == "playing") {
+                sendMessage.sendSucceedMessage(res, 'user:playing');
                 return;
-            }else{
+            } else {
 
                 const statusInfo = [];
                 statusInfo.push("login");
@@ -1610,18 +711,18 @@ router.post('/startResume', function (req,res) {
                 multi.select(3)
                     .set(userStatus(id), info)
                     .exec(function (err) {
-                        if(err){
+                        if (err) {
                             sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
                             return;
                         }
-                        sendMessage.sendSucceedMessage(res,'user:login');
+                        sendMessage.sendSucceedMessage(res, 'user:login');
                     });
             }
         });
 });
 
 
-router.post('/startExit', function (req,res) {
+router.post('/startExit', function (req, res) {
 
 
     let id;
@@ -1643,7 +744,6 @@ router.post('/startExit', function (req,res) {
 });
 
 
-
 //-------------------* 161210 *-------------------//
 
 
@@ -1662,7 +762,6 @@ router.post('/startExit', function (req,res) {
  */
 
 
-
 router.post('/purchaseItemWithCoin', function (req, res) {
 
 
@@ -1677,7 +776,7 @@ router.post('/purchaseItemWithCoin', function (req, res) {
         return;
     }
 
-    if(item == slogan  ){
+    if (item == slogan) {
 
         multi.select(0)
             .hset(getUserInfo(id), getFieldHasSlogan(), 1)
@@ -1690,7 +789,7 @@ router.post('/purchaseItemWithCoin', function (req, res) {
                 }
                 setUserLogining.setUserLogining(res, id, 'succeed');
             });
-    }else{
+    } else {
 
         multi.select(0)
             .sadd(getUserBalloonList(id), item)
@@ -1736,25 +835,22 @@ router.get('/getNoticeUpdate', function (req, res) {
             return;
         }
 
-        const  noticeList = [];
+        const noticeList = [];
         const notices = _.keys(reply);
 
         _.each(notices, function (notices_index) {
-            const info = notices_index+":"+reply[notices_index];
+            const info = notices_index + ":" + reply[notices_index];
             noticeList.push(info);
         });
 
-        let lastNum = noticeList.length-1;
+        let lastNum = noticeList.length - 1;
         let send_notice = noticeList[lastNum];
 
         // sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, send_notice);
-        sendMessage.sendSucceedNotice(res,send_notice);
+        sendMessage.sendSucceedNotice(res, send_notice);
 
     });
 });
-
-
-
 
 
 router.get('/initFandomStar', function (req, res) {
@@ -1780,7 +876,7 @@ router.get('/initFandomStar', function (req, res) {
 
 
             multi.select(0)
-                .hset(getFandomStar(),rowData[key][keys[5]], rowData[key][keys[4]])
+                .hset(getFandomStar(), rowData[key][keys[5]], rowData[key][keys[4]])
                 .exec(function (err) {
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
@@ -1801,8 +897,6 @@ router.get('/fandomBaseInfo01', function (req, res) {
     let datas = [];
     let fandomBaseInfos = [];
     const multi = redisClient.multi();
-
-
 
 
     multi.select(0)
@@ -1847,12 +941,11 @@ router.get('/fandomBaseInfo01', function (req, res) {
                 }
 
 
-
                 for (let i = 0; i < datas.length; i++) {
 
 
                     const fandomBaseData = datas[i];
-                    const i01 = 3*i + 1;
+                    const i01 = 3 * i + 1;
                     const i02 = i01 + 1;
                     const i03 = i01 + 2;
 
@@ -1873,8 +966,6 @@ router.get('/fandomBaseInfo01', function (req, res) {
             });
         });
 });
-
-
 
 
 ///////////////////////// 윤태린 /////////////////////////
@@ -1903,7 +994,6 @@ function getUserMatchedList(userId) {
 }
 
 
-
 /*
 
  1. initFandomUserNumber
@@ -1923,8 +1013,6 @@ function getUserMatchedList(userId) {
  - 배경화면 색상 초기화
 
  */
-
-
 
 
 router.get('/initFandomUserNumber', function (req, res) {
@@ -1953,7 +1041,6 @@ router.get('/initFandomUserNumber', function (req, res) {
         sendMessage.sendSucceedMessage(res, SUCCEED_INIT_DB);
     });
 });
-
 
 
 router.get('/initBalloonColorList', function (req, res) {
@@ -2019,7 +1106,6 @@ router.get('/initShopBalloon', function (req, res) {
 });
 
 
-
 router.get('/initFandomBalloonRank', function (req, res) {
     const multi = redisClient.multi();
     multi.select(0)
@@ -2054,10 +1140,6 @@ router.get('/initFandomBalloonRank', function (req, res) {
 });
 
 
-
-
-
-
 router.get('/initFandomRank', function (req, res) {
 
     const multi = redisClient.multi();
@@ -2089,7 +1171,6 @@ router.get('/initFandomRank', function (req, res) {
             });
         });
 });
-
 
 
 router.get('/initNotice', function (req, res) {
@@ -2137,9 +1218,6 @@ router.get('/initBackground', function (req, res) {
         });
     });
 });
-
-
-
 
 
 /*--------------------------------- 초기화 ---------------------------------*/
@@ -2249,10 +1327,6 @@ router.post('/join', function (req, res) {
 });
 
 
-
-
-
-
 router.get('/fandomUserNumberRank', function (req, res) {
     const multi = redisClient.multi();
     multi.select(0)
@@ -2275,8 +1349,6 @@ router.get('/fandomUserNumberRank', function (req, res) {
 });
 
 
-
-
 router.post('/joinFandom', function (req, res) {
 
 
@@ -2291,7 +1363,6 @@ router.post('/joinFandom', function (req, res) {
     statusInfo.push("login");
     statusInfo.push(current_time());
     info = JSON.stringify(statusInfo);
-
 
 
     if (!id || !fandomName || !selectedBalloonColor) {
@@ -2312,9 +1383,6 @@ router.post('/joinFandom', function (req, res) {
             let allFandomNumber = replies[1];
             let fandomRank = allFandomNumber - replies[2];
             let userFandomRankRatio = fandomRank / allFandomNumber;
-
-
-
 
 
             // var multi = redisClient.multi();
@@ -2364,12 +1432,6 @@ router.post('/joinFandom', function (req, res) {
 });
 
 
-
-
-
-
-
-
 router.post('/login', function (req, res) {
 
 
@@ -2406,13 +1468,8 @@ router.post('/login', function (req, res) {
             setUserLogining.setUserLogining(res, id, 'loginSucceed');
         });
 
-
-
     });
 });
-
-
-
 
 
 router.post('/loginSucceed', function (req, res) {
@@ -2519,9 +1576,6 @@ router.get('/balloonColorList', function (req, res) {
 });
 
 
-
-
-
 /*
 
  1. shopList
@@ -2550,7 +1604,6 @@ router.get('/balloonColorList', function (req, res) {
  - 슬로건 문구 및 url 변경
 
  */
-
 
 
 router.get('/shopList', function (req, res) {
@@ -2605,8 +1658,6 @@ router.post('/allUserRankInFandom', function (req, res) {
     }
 
 
-
-
     redisClient.select(0);
     redisClient.zrevrange(getUserRank(fandomName), 0, -1, 'withscores', function (err, ranks) {
 
@@ -2620,7 +1671,6 @@ router.post('/allUserRankInFandom', function (req, res) {
             setUserLogining.setUserLogining(res, id, 'allUserRankInFandom', {});
             return;
         }
-
 
 
         let rankInfo = [];
@@ -2685,8 +1735,6 @@ router.post('/userBalloonList', function (req, res) {
 });
 
 
-
-
 router.post('/userInfo', function (req, res) {
 
     const id = req.body.id;
@@ -2710,7 +1758,6 @@ router.post('/userInfo', function (req, res) {
             setUserLogining.setUserLogining(res, id, 'userInfo', userInfo);
         });
 });
-
 
 
 router.post('/main', function (req, res) {
@@ -2748,9 +1795,6 @@ router.post('/main', function (req, res) {
 });
 
 
-
-
-
 router.post('/purchaseSlogan', function (req, res) {
 
     const id = req.body.id;
@@ -2781,12 +1825,10 @@ router.post('/settingSlogan', function (req, res) {
     const sloganText = req.body.text;
     const url = req.body.url;
 
-    if (!id|| !sloganText || !url) {
+    if (!id || !sloganText || !url) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
-
-
 
 
     redisClient.select(0);
@@ -2808,8 +1850,6 @@ router.post('/settingSlogan', function (req, res) {
         }
     });
 });
-
-
 
 
 /*
@@ -2839,7 +1879,6 @@ router.post('/settingSlogan', function (req, res) {
  */
 
 
-
 router.post('/purchaseBalloon', function (req, res) {
 
 
@@ -2865,11 +1904,6 @@ router.post('/purchaseBalloon', function (req, res) {
 
         });
 });
-
-
-
-
-
 
 
 router.get('/getNotice', function (req, res) {
@@ -2942,8 +1976,6 @@ router.post('/delUser', function (req, res) {
         });
     });
 });
-
-
 
 
 router.post('/setProfile', function (req, res) {
@@ -3022,7 +2054,6 @@ router.get('/balloon/rgb', function (req, res) {
         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, colorData);
     });
 });
-
 
 
 module.exports = router;
