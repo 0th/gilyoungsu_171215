@@ -5,8 +5,8 @@ const moment = require('moment');
 const GoogleSpreadSheet = require("google-spreadsheet");
 
 
-//const redisClient = redis.createClient(6379, 'fc-redis');
-const redisClient = redis.createClient(6379, 'localhost');
+const redisClient = redis.createClient(6379, 'fc-redis');
+// const redisClient = redis.createClient(6379, 'localhost');
 
 
 const router = express.Router();
