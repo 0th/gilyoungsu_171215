@@ -1,6 +1,8 @@
 const express = require('express');
 const redis = require('redis');
 const moment = require('moment');
+const async = require('async');
+
 const GoogleSpreadSheet = require("google-spreadsheet");
 
 
@@ -265,6 +267,337 @@ function recordBattle(id) {
 
 /////////////////////////////////////////////////////////////////////////
 
+
+
+
+//-------------------* UPDATE_170704 *-------------------//
+
+
+
+//1. 업데이트 팬덤
+/*
+ 1. initFandomStar - 스타명
+ 2. initFandomUserNumber - 팬덤별 유저 수 초기화
+ 3. initFandomRank - 팬덤 랭킹 초기화
+ 4. initFandomBalloonRank - 팬덤별 풍선 랭킹 초기화
+
+ */
+
+
+router.post('/updatefandom', function (req, res) {
+
+
+    let fandom_before = req.body.fandom_before;
+    let fandom_after = req.body.fandom_after;
+    const multi = redisClient.multi();
+    let count = 0;
+    let score_member;
+    let score_rank;
+    let star;
+    let fandom_balloon;
+
+    async.waterfall([
+
+
+
+            function(callback) {
+
+                ++count;
+
+                multi.select(0)
+                    .hget(getFandomStar(),fandom_before)
+                    .hdel(getFandomStar(),fandom_before)
+                    .exec(function (err, reply,succeed) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+
+                        star = reply[1];
+
+                        callback(null, '1. 팬덤-스타 업데이트(1/2) ');
+                    });
+
+            },
+
+            function(arg, callback) {
+
+                ++count;
+
+                multi.select(0)
+
+                    .hset(getFandomStar(),fandom_after,star)
+                    .exec(function (err) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+
+                        callback(null, '1. 팬덤-스타 업데이트(2/2) ');
+
+                    });
+
+            },
+
+            function(arg, callback) {
+
+                ++count;
+                multi.select(0)
+                    .zscore(getFandomUserNumber(),fandom_before)
+                    .zrem(getFandomUserNumber(),fandom_before)
+                    .exec(function (err, reply) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        score_member = reply[1];
+                        callback(null, '2. 팬덤 유저 가져오기(1/2)');
+
+                    });
+
+            },
+
+            function(arg, callback) {
+
+                ++count;
+
+                multi.select(0)
+                    .zadd(getFandomUserNumber(), score_member, fandom_after)
+                    .exec(function (err) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        callback(null, '2. 팬덤 유저 가져오기(2/2)');
+                    });
+            },
+
+            function(arg, callback) {
+                ++count;
+                multi.select(0)
+                    .zscore(getFandomRank(),fandom_before)
+                    .zrem(getFandomRank(),fandom_before)
+                    .exec(function (err, reply) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        score_rank = reply[1];
+                        callback(null, '3. 팬덤 랭크 등록(1/2)');
+                    });
+            },
+
+            function(arg, callback) {
+                ++count;
+                multi.select(0)
+                    .zadd(getFandomRank(), score_rank, fandom_after)
+                    .exec(function (err) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        callback(null, '3. 팬덤 랭크 등록(2/2)');
+                    });
+            },
+
+            function(arg,callback) {
+
+                ++count;
+
+                multi.select(0)
+
+                    .zrange(getFandomBalloonRank(fandom_before), 0, -1,'withscores')
+                    .exec(function (err, reply) {
+
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+
+                        fandom_balloon = reply[1];
+                        consoleInputLog("fandom_balloon: "+JSON.stringify(fandom_balloon));
+                        callback(null, '4. 팬덤 풍선 등록(1/2)');
+                    });
+            },
+
+            function (arg, callback) {
+                ++count;
+
+                let num_color = 0;
+                let score_color = 1;
+                multi.select(0);
+                multi.del(getFandomBalloonRank(fandom_before));
+                let range = fandom_balloon.length*0.5;
+                for(let i=0; i < range; i++ ){
+                    multi.zadd(getFandomBalloonRank(fandom_after), fandom_balloon[score_color], fandom_balloon[num_color]);
+                    num_color+=2;
+                    score_color+=2;
+                    multi.exec(function (err) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        callback(null, '4. 팬덤 풍선 등록(2/2)');
+                    });
+                }
+            }
+        ],
+
+
+        function(err,result){
+
+            result = count +' 번 카운트 : '+ result;
+
+            if(err) {
+                console.log(err);
+            }
+            sendMessage.sendSucceedMessage(res, result);
+        }
+
+    );
+
+
+});
+
+
+
+//-------------------* UPDATE_170628 *-------------------//
+
+
+
+//1. 신규 팬덤 등록
+
+
+
+router.post('/addfandom', function (req, res) {
+
+
+    const star = req.body.star;
+    const fandom = req.body.fandom;
+    const multi = redisClient.multi();
+    let count = 0;
+    let allBalloonColorList;
+    let result = "1. 팬덤등록, 2. 팬덤 > 유저 수 등록, 3. 팬덤 > 풍선 칼라  등록, 4. 팬덤 랭크 등록";
+
+    // 1. 팬덤등록
+    // 2. 팬덤 > 유저 수 등록
+    // 3. 팬덤 > 풍선 칼라  등록
+    // 4. 팬덤 랭크 등록
+
+
+
+    async.waterfall([
+
+
+
+            function(callback) {
+
+                ++count;
+
+                multi.select(0)
+                    .hset(getFandomStar(),fandom,star)
+                    .exec(function (err) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        consoleInputLog("1번 ");
+                        callback(null, '1. 팬덤등록 ');
+                    });
+
+            },
+
+            function(arg, callback) {
+
+                ++count;
+                //1. 신규 등록: 팬덤 - 스코어
+                multi.select(0)
+                    .zadd(getFandomUserNumber(), 0, fandom)
+                    .exec(function (err) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+
+                        consoleInputLog("2번 ");
+                        callback(null, '2. 팬덤 > 유저 수 등록');
+
+                    });
+
+
+            },
+
+
+            function(arg, callback) {
+
+                ++count;
+
+                multi.select(0)
+                    .zadd(getFandomRank(), 0, fandom)
+                    .exec(function (err) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+
+                        }
+
+                        consoleInputLog("3번 ");
+                        callback(null, '3. 팬덤 랭크 등록');
+
+                    });
+
+
+            },
+
+            function(arg, callback) {
+
+                ++count;
+
+                multi.select(0)
+                    .zrange(getBalloonColor(), 0, -1)
+                    .exec(function (err, reply) {
+
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+
+                        }
+
+                        allBalloonColorList = reply[1];
+                        consoleInputLog("reply(1):  "+JSON.stringify(allBalloonColorList));
+
+                        multi.select(0);
+
+                        _.map(allBalloonColorList, function (eachColor) {
+                            multi.zadd(getFandomBalloonRank(fandom), 0, eachColor);
+                        });
+
+                        multi.exec(function (err) {
+                            if (err) {
+                                callback(null, ERROR_DATABASE);
+                            }
+
+                            consoleInputLog("4번 ");
+                            callback(null, result);
+
+                        });
+
+                    });
+
+            }
+
+
+
+        ],
+
+
+        function(err,result){
+
+            result = count +' 번 카운트 : '+ result;
+
+            if(err) {
+                console.log(err);
+            }
+            sendMessage.sendSucceedMessage(res, result);
+        }
+
+    );
+
+
+});
+
+
+
+
+
 //-------------------* UPDATE_170614 *-------------------//
 
 
@@ -292,7 +625,6 @@ const gameLevelRatioSheet = new GoogleSpreadSheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dV
 const hasStarByLevelSheet = new GoogleSpreadSheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
 
 
-let async = require('async');
 let initfdc_count =0;
 
 function getHasStarByLevel() {
@@ -306,8 +638,8 @@ router.get('/initfdc', function (req, res) {
     async.waterfall([
 
             function (callback) {
-                ++initfdc_count;
 
+                ++initfdc_count;
 
                 fandomListSheet.getRows(1, function (err, rowData) {
 
@@ -333,7 +665,7 @@ router.get('/initfdc', function (req, res) {
                 });
             },
 
-            function(arg1, callback) {
+            function(arg, callback) {
                 ++initfdc_count;
 
                 const balloonColorSheetNum = 1;
@@ -362,7 +694,7 @@ router.get('/initfdc', function (req, res) {
 
             },
 
-            function(arga, callback) {
+            function(arg, callback) {
                 ++initfdc_count;
 
                 const balloonItemSheet = 1;
@@ -394,7 +726,7 @@ router.get('/initfdc', function (req, res) {
                 });
             },
 
-            function(arg1, callback){
+            function(arg, callback){
                 ++initfdc_count;
 
 
@@ -415,7 +747,7 @@ router.get('/initfdc', function (req, res) {
                 });
             },
 
-            function (arg1, callback) {
+            function (arg, callback) {
                 ++initfdc_count;
 
 
@@ -441,7 +773,7 @@ router.get('/initfdc', function (req, res) {
                 });
             },
 
-            function (arg1, callback) {
+            function (arg, callback) {
                 ++initfdc_count;
 
 
@@ -461,7 +793,7 @@ router.get('/initfdc', function (req, res) {
                 });
             },
 
-            function (arg1, callback) {
+            function (arg, callback) {
                 ++initfdc_count;
 
 
@@ -494,7 +826,7 @@ router.get('/initfdc', function (req, res) {
 
             },
 
-            function (arg1, callback) {
+            function (arg, callback) {
                 ++initfdc_count;
 
 
@@ -530,7 +862,7 @@ router.get('/initfdc', function (req, res) {
                 });
             },
 
-            function(arg1, callback){
+            function(arg, callback){
                 ++initfdc_count;
 
                 gameLevelRatioSheet.getRows(1, function (err, rowData) {
@@ -559,7 +891,7 @@ router.get('/initfdc', function (req, res) {
 
             },
 
-            function (arg1, callback) {
+            function (arg, callback) {
                 ++initfdc_count;
 
 
@@ -588,7 +920,7 @@ router.get('/initfdc', function (req, res) {
 
             },
 
-            function (arg1, callback) {
+            function (arg, callback) {
                 ++initfdc_count;
 
                 const multi = redisClient.multi();
@@ -616,14 +948,14 @@ router.get('/initfdc', function (req, res) {
                                 callback(null, ERROR_DATABASE);
 
                             }
-                            callback(null, '1. 팬덤별 풍선 랭킹 초기화');
+                            callback(null, '11. 팬덤별 풍선 랭킹 초기화');
                         });
                     });
             },
 
-            function (arg1, callback) {
-                ++initfdc_count;
+            function (arg, callback) {
 
+                ++initfdc_count;
 
                 const multi = redisClient.multi();
                 multi.select(0)
@@ -649,7 +981,7 @@ router.get('/initfdc', function (req, res) {
 
                             }
 
-                            callback(null, '2. 팬덤 랭킹 초기화');
+                            callback(null, '12. 팬덤 랭킹 초기화');
                         });
                     });
             }
@@ -2873,6 +3205,7 @@ router.get('/balloon/rgb', function (req, res) {
 
 
 module.exports = router;
+
 
 
 
