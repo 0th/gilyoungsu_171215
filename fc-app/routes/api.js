@@ -314,7 +314,7 @@ router.post('/updatefandom', function (req, res) {
 
                         star = reply[1];
 
-                        callback(null, '1. 팬덤-스타 업데이트(1/2) ');
+                        callback(null, star);
                     });
 
             },
@@ -322,6 +322,8 @@ router.post('/updatefandom', function (req, res) {
             function(arg, callback) {
 
                 ++count;
+
+                star = arg;
 
                 multi.select(0)
 
@@ -348,7 +350,7 @@ router.post('/updatefandom', function (req, res) {
                             callback(null, ERROR_DATABASE);
                         }
                         score_member = reply[1];
-                        callback(null, '2. 팬덤 유저 가져오기(1/2)');
+                        callback(null, score_member);
 
                     });
 
@@ -357,6 +359,8 @@ router.post('/updatefandom', function (req, res) {
             function(arg, callback) {
 
                 ++count;
+
+                score_member = arg;
 
                 multi.select(0)
                     .zadd(getFandomUserNumber(), score_member, fandom_after)
@@ -378,12 +382,14 @@ router.post('/updatefandom', function (req, res) {
                             callback(null, ERROR_DATABASE);
                         }
                         score_rank = reply[1];
-                        callback(null, '3. 팬덤 랭크 등록(1/2)');
+                        callback(null, score_rank);
                     });
             },
 
             function(arg, callback) {
                 ++count;
+                score_rank = arg;
+
                 multi.select(0)
                     .zadd(getFandomRank(), score_rank, fandom_after)
                     .exec(function (err) {
@@ -409,12 +415,13 @@ router.post('/updatefandom', function (req, res) {
 
                         fandom_balloon = reply[1];
                         consoleInputLog("fandom_balloon: "+JSON.stringify(fandom_balloon));
-                        callback(null, '4. 팬덤 풍선 등록(1/2)');
+                        callback(null, fandom_balloon);
                     });
             },
 
             function (arg, callback) {
                 ++count;
+                fandom_balloon = arg;
 
                 let num_color = 0;
                 let score_color = 1;
@@ -477,7 +484,6 @@ router.post('/addfandom', function (req, res) {
     // 4. 팬덤 랭크 등록
 
 
-
     async.waterfall([
 
 
@@ -492,88 +498,83 @@ router.post('/addfandom', function (req, res) {
                         if (err) {
                             callback(null, ERROR_DATABASE);
                         }
-                        consoleInputLog("1번 ");
                         callback(null, '1. 팬덤등록 ');
                     });
 
-            },
-
-            function(arg, callback) {
-
-                ++count;
-                //1. 신규 등록: 팬덤 - 스코어
-                multi.select(0)
-                    .zadd(getFandomUserNumber(), 0, fandom)
-                    .exec(function (err) {
-                        if (err) {
-                            callback(null, ERROR_DATABASE);
-                        }
-
-                        consoleInputLog("2번 ");
-                        callback(null, '2. 팬덤 > 유저 수 등록');
-
-                    });
-
-
-            },
-
-
-            function(arg, callback) {
-
-                ++count;
-
-                multi.select(0)
-                    .zadd(getFandomRank(), 0, fandom)
-                    .exec(function (err) {
-                        if (err) {
-                            callback(null, ERROR_DATABASE);
-
-                        }
-
-                        consoleInputLog("3번 ");
-                        callback(null, '3. 팬덤 랭크 등록');
-
-                    });
-
-
-            },
-
-            function(arg, callback) {
-
-                ++count;
-
-                multi.select(0)
-                    .zrange(getBalloonColor(), 0, -1)
-                    .exec(function (err, reply) {
-
-                        if (err) {
-                            callback(null, ERROR_DATABASE);
-
-                        }
-
-                        allBalloonColorList = reply[1];
-                        consoleInputLog("reply(1):  "+JSON.stringify(allBalloonColorList));
-
-                        multi.select(0);
-
-                        _.map(allBalloonColorList, function (eachColor) {
-                            multi.zadd(getFandomBalloonRank(fandom), 0, eachColor);
-                        });
-
-                        multi.exec(function (err) {
-                            if (err) {
-                                callback(null, ERROR_DATABASE);
-                            }
-
-                            consoleInputLog("4번 ");
-                            callback(null, result);
-
-                        });
-
-                    });
-
             }
-
+            //
+            // function(arg, callback) {
+            //
+            //     ++count;
+            //     //1. 신규 등록: 팬덤 - 스코어
+            //     multi.select(0)
+            //         .zadd(getFandomUserNumber(), 0, fandom)
+            //         .exec(function (err) {
+            //             if (err) {
+            //                 callback(null, ERROR_DATABASE);
+            //             }
+            //
+            //             callback(null, '2. 팬덤 > 유저 수 등록');
+            //
+            //         });
+            //
+            //
+            // },
+            //
+            //
+            // function(arg, callback) {
+            //
+            //     ++count;
+            //
+            //     multi.select(0)
+            //         .zadd(getFandomRank(), 0, fandom)
+            //         .exec(function (err) {
+            //             if (err) {
+            //                 callback(null, ERROR_DATABASE);
+            //
+            //             }
+            //
+            //             callback(null, '3. 팬덤 랭크 등록');
+            //
+            //         });
+            //
+            //
+            // },
+            //
+            // function(arg, callback) {
+            //
+            //     ++count;
+            //
+            //     multi.select(0)
+            //         .zrange(getBalloonColor(), 0, -1)
+            //         .exec(function (err, reply) {
+            //
+            //             if (err) {
+            //                 callback(null, ERROR_DATABASE);
+            //
+            //             }
+            //
+            //             allBalloonColorList = reply[1];
+            //
+            //             multi.select(0);
+            //
+            //             _.map(allBalloonColorList, function (eachColor) {
+            //                 multi.zadd(getFandomBalloonRank(fandom), 0, eachColor);
+            //             });
+            //
+            //             multi.exec(function (err) {
+            //                 if (err) {
+            //                     callback(null, ERROR_DATABASE);
+            //                 }
+            //
+            //                 callback(null, result);
+            //
+            //             });
+            //
+            //         });
+            //
+            // }
+            //
 
 
         ],
@@ -3205,7 +3206,6 @@ router.get('/balloon/rgb', function (req, res) {
 
 
 module.exports = router;
-
 
 
 
