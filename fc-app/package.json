@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start": "node ./bin/FandomCup"
+    "start": "node ./bin/www"
   },
   "dependencies": {
     "bluebird": "^3.4.6",
@@ -20,5 +20,6 @@
     "serve-favicon": "~2.3.0",
     "underscore": "^1.8.3",
     "async": "~0.1.22"
+
   }
 }
