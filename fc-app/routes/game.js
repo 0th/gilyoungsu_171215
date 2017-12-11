@@ -3,15 +3,21 @@ const redis = require('redis');
 const moment = require('moment');
 const _ = require('underscore');
 const __ = require('lodash');
+const router = express.Router();
 const GoogleSpreadsheet = require("google-spreadsheet");
+const gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
+const hasStarByLevelSheet = new GoogleSpreadsheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
 
+
+///////////////////////// AWS VS Local ///////////////////////////////////////
 
 const redisClient = redis.createClient(6379, 'fc-redis');
 // const redisClient = redis.createClient(6379, '127.0.0.1');
 
-const router = express.Router();
-const gameLevelRatioSheet = new GoogleSpreadsheet('1KcXl1hRoJ-xL4yqOo1ahf8WjG-dVfspZTPp1Akt15Yc');
-const hasStarByLevelSheet = new GoogleSpreadsheet('1k-xgKpJYQkgZH8nrSS8qx0KZ3BoSDvo-ys6LWV6hV1c');
+/////////////////////////////////////////////////////////////////////////////
+
+
+
 
 const ERROR_SHEET = 101;
 const ERROR_SERVER = 202;
@@ -21,19 +27,13 @@ const SUCCEED_RESPONSE = 704;
 const SUCCEED_INIT_DB = 701;
 const GAME_BOARD = 36;
 const LOGIN_VALID_TIME = 60;
-
 const TIME_WEEK = 60*60*24*7;
-
-
-
-
 let message = {};
+
 message[ERROR_SHEET] = "구글 스프레드시트 오류";
 message[ERROR_SERVER] = "서버연결 실패";
 message[ERROR_WRONG_INPUT] = "입력값 오류";
 message[ERROR_NO_MATCH] = "게임 매칭 실패";
-
-
 
 
 
@@ -51,8 +51,6 @@ function addMethod(object, functionName, func) {
 
 
 const sendMessage = new SendMessage();
-
-
 
 function SendMessage() {
     addMethod(this, "sendSucceedMessage", function (res, succeedCode) {
@@ -82,21 +80,16 @@ function SetUserLogining() {
 
 
     addMethod(this, "setUserLogining", function (res, userId, protocol) {
-
         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, '[settingDefenseMode] ok , [GameOver] usr: login competitorId: logout ');
-
     });
 
 
     addMethod(this, "setUserLoginingNoMatched", function (res, userId, protocol) {
-
         sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
-
     });
 
 
     addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, competitorGameInfo, userInfo) {
-
 
         const matchedInfo = {};
         let multi;
@@ -165,14 +158,11 @@ function SetUserLogining() {
 
     addMethod(this, "checkGhost", function (res, id, matchedInfo) {
 
-
         const multi = redisClient.multi();
-
 
         multi.select(1)
             .lrem(getUserMatchedList(id),0,matchedInfo)
             .exec(function (err) {
-
 
                 if(err){
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -284,6 +274,9 @@ function getUserMatchedList(userId) {
 
 
 
+
+
+
 ///////////////////////////////// GILVERT //////////////////////////////////
 
 
@@ -301,12 +294,9 @@ function  current_time() {
     return time;
 }
 
-
-
 function userStatus(userid) {
     return 'status:'+ userid;
 }
-
 
 function recordBattle(id) {
     return 'battle:'+id;
@@ -314,42 +304,12 @@ function recordBattle(id) {
 
 
 
-
-//-------------------* UPDATE_170329 *-------------------//
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//////////////////////////////////////////////////////////////////////////
-
-
-
-
-
-
-
-
 //-------------------* UPDATE_170313~15 *-------------------//
 
 
-
 /*
-
  1. time_format
  - 방어기록 시간 포맷
-
  */
 
 
@@ -359,13 +319,10 @@ function time_format(time) {
 
 
     let pre_time = new Date(time);
-
-
     let old_time = pre_time;
     let now_time = new Date();
     let old = old_time.getTime();
     let now = now_time.getTime();
-
     let diff_time = Math.abs(now - old);
     let num = 1000*3600*24;
     let diff_day = Math.floor(diff_time/num);
@@ -380,10 +337,10 @@ function time_format(time) {
 
         if(check == 'pm'){
             day = moment(old_time).format('h:mm');
-            day = '오후 '+day;
+            day = 'PM '+day;
         }else{
             day = moment(old_time).format('h:mm');
-            day = '오전 '+day;
+            day = 'AM '+day;
         }
 
 
@@ -392,21 +349,21 @@ function time_format(time) {
         day = moment(old_time).format('dddd');
 
         switch (day) {
-            case 'Monday'    : day = '월요일';
+            case 'Monday'    : day = 'Mon';
                 break;
-            case 'Tuesday'   : day = '화요일';
+            case 'Tuesday'   : day = 'Tue';
                 break;
-            case 'Wednesday'  : day = '수요일';
+            case 'Wednesday'  : day = 'Wed';
                 break;
-            case 'Thursday'  : day = '목요일';
+            case 'Thursday'  : day = 'Thu';
                 break;
-            case 'Friday'  : day = '금요일';
+            case 'Friday'  : day = 'Fri';
                 break;
-            case 'Saturday'  : day = '토요일';
+            case 'Saturday'  : day = 'Sat';
                 break;
-            case 'Sunday'  : day = '일요일';
+            case 'Sunday'  : day = 'Sun';
                 break;
-            default    : day = '팬덤데이';
+            default    : day = 'FDC';
                 break;
 
         }
@@ -435,6 +392,8 @@ router.get('/test', function (req, res) {
 
  */
 
+
+
 router.post('/userMatchedList', function (req, res) {
 
     const id = req.body.id;
@@ -444,9 +403,9 @@ router.post('/userMatchedList', function (req, res) {
         return;
     }
 
-
     redisClient.select(1);
     redisClient.lrange(getUserMatchedList(id), 0, -1, function (err, matchedInfo) {
+
 
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -459,11 +418,7 @@ router.post('/userMatchedList', function (req, res) {
             return;
         }
 
-
-
         /*------------------------------추가되는 부분1-------------------------------------------*/
-
-
 
         function temp_fun(id) {
             return 'user:'+id+':info';
@@ -474,9 +429,7 @@ router.post('/userMatchedList', function (req, res) {
         let temp_matchedInfos = [];
         const multi = redisClient.multi();
 
-
         multi.select(0);
-
 
         _.each(matchedInfo, function (id) {
 
@@ -541,10 +494,6 @@ router.post('/userMatchedList', function (req, res) {
                 ///////////////////////[시작]여기에 기존에 있는 값을 넣어보자////////////////////////////////
 
 
-
-
-
-
                 multi.select(0);
 
                 matchedInfo.forEach(function (info) {
@@ -564,12 +513,6 @@ router.post('/userMatchedList', function (req, res) {
                     }
 
                     const histories = [];
-
-
-
-
-
-
 
 
                     matchedUserInfos.forEach(function (info, index) {
@@ -608,11 +551,6 @@ router.post('/userMatchedList', function (req, res) {
 
 
 
-
-
-
-
-
                     //중복된 아이디 카운트
                     const userCount = __.countBy(histories, function (info) {
                         return info.id;
@@ -629,7 +567,6 @@ router.post('/userMatchedList', function (req, res) {
                 }).value();
 
 
-
                     //사용자가 공격 가능한 상태인지 파악하는 부분
                     multi.select(3);
 
@@ -642,9 +579,7 @@ router.post('/userMatchedList', function (req, res) {
                     });
 
 
-
                     multi.exec(function (err, isExists) {
-
 
 
                         if (err) {
@@ -656,7 +591,6 @@ router.post('/userMatchedList', function (req, res) {
 
                             if (index == 0)
                                 return;
-
 
                             if (exist) {
                                 result[index - 1].canGame = false;
@@ -674,8 +608,7 @@ router.post('/userMatchedList', function (req, res) {
                 });
 
 
-
-                ///////////////////////여기에 기존에 있는 값을 넣어보자////////////////////////////////
+                ///////////////////////여기에 기존에 있는 값을 넣어보자 END ////////////////////////////////
 
             });
 
@@ -684,9 +617,6 @@ router.post('/userMatchedList', function (req, res) {
     });
 
 });
-
-
-
 
 
 
@@ -710,9 +640,9 @@ router.post('/startLogin', function (req, res) {
     let flag_time;
     let flag_playing = false;
     let flag_id = false;
-
-
     id = req.body.id;
+
+
     multi = redisClient.multi();
 
 
@@ -761,13 +691,9 @@ router.post('/startLogin', function (req, res) {
                 }
 
 
-
             }
 
-
-
         });
-
 
 
     //2. 사용자 방어 상대방 확인
@@ -874,15 +800,25 @@ router.post('/startLogin', function (req, res) {
 
                         }else{
 
-                            let info_battle = JSON.parse(reply[1]);
-                            let other_id = info_battle[0];
+                            let value = JSON.parse(reply[1]);
+                            1
+                            if( value == "" || value == null || value == undefined || ( value != null && typeof value == "object" && !Object.keys(value).length ) ){
 
-
-                            if(other_id == id){
-                                flag_id = true;
-                            }else{
                                 flag_id = false;
+
+                            }else{
+
+                                // let other_id = info_battle[0];
+                                let other_id = value[0];
+
+                                if(other_id == id){
+                                    flag_id = true;
+                                }else{
+                                    flag_id = false;
+                                }
                             }
+
+
 
                         }
 
@@ -912,13 +848,7 @@ router.post('/startLogin', function (req, res) {
 
                         }
 
-
-
-
                     });
-
-
-
 
             });
 
@@ -939,7 +869,6 @@ router.post('/startLogin', function (req, res) {
  - @id, @competitorId
  - 대전 > 정지 : 다시 대전으로 돌아오는 경우
  */
-
 
 
 router.post('/btnResumeToGame', function (req,res) {
@@ -991,7 +920,6 @@ router.post('/btnResumeToGame', function (req,res) {
  - @id, @competitorId
  4. exitOnGame
  - @id, @competitorId
-
 
  */
 
@@ -1090,12 +1018,7 @@ router.post('/resumeOnGame', function (req,res) {
 
     }
 
-
 });
-
-
-
-
 
 
 
@@ -1131,8 +1054,8 @@ router.post('/btnExitOnGame', function (req,res) {
 });
 
 
-router.post('/exitOnGame', function (req,res) {
 
+router.post('/exitOnGame', function (req,res) {
 
     let id;
     let competitorId;
@@ -1173,10 +1096,6 @@ router.post('/exitOnGame', function (req,res) {
 
 
 });
-
-
-
-
 
 
 
@@ -1272,6 +1191,7 @@ router.get('/initHasStarByLevel', function (req, res) {
 
 
 
+
 router.post('/gameStart', function (req, res) {
 
     const userFandomName = req.body.fandomName;
@@ -1282,14 +1202,18 @@ router.post('/gameStart', function (req, res) {
         return;
     }
 
+
+
     const multi = redisClient.multi();
     multi.select(0)
         .zrange(getFandomUserNumber(), 0, -1, 'withscores')
         .exec(function (err, reply) {
+
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
+
             let fandomUserNumbers = reply[1];
             let fandomExistingUserList = [];
 
@@ -1305,6 +1229,7 @@ router.post('/gameStart', function (req, res) {
             }
 
 
+
             if (fandomExistingUserList.length == 0) {
                 setUserLogining.setUserLoginingNoMatched(res, userId, 'gameStart');
                 return;
@@ -1317,7 +1242,9 @@ router.post('/gameStart', function (req, res) {
                         return;
                     }
 
-                    getCompetitorUserInfo(competitorId, function (result) {
+
+                    getCompetitorUserInfo(res, competitorId, function (result) {
+
 
                         redisClient.select(0);
                         redisClient.hgetall(getUserInfo(userId), function (err, userInfo) {
@@ -1339,15 +1266,18 @@ router.post('/gameStart', function (req, res) {
 });
 
 
+
+
+
 const searchCompetitorId = function (fandomExistingUserList, count, callback) {
 
 
     let randomIndex = makeRandom(0, fandomExistingUserList.length);
     let competitorFandomInfos = fandomExistingUserList[randomIndex];
     let competitorFandomName = competitorFandomInfos[getFieldFandomName()];
-
-
     const multi = redisClient.multi();
+
+
     multi.select(0)
         .srandmember(getCanGameUser(competitorFandomName))
         .exec(function (err, reply) {
@@ -1365,6 +1295,7 @@ const searchCompetitorId = function (fandomExistingUserList, count, callback) {
                 .exists(userStatus(competitorId))
                 .exec(function (err, reply) {
 
+
                     ++count;
                     let isLogining = reply[1]; // 0: 로그아웃 1: 로그인 플레이
 
@@ -1378,14 +1309,10 @@ const searchCompetitorId = function (fandomExistingUserList, count, callback) {
 
                     else if (!isLogining) {
 
-
                         callback(competitorId);
-
 
                         const time = moment().format('YYYY.MM.DD HH:mm');
                         let status = "[\"playing\",\"" + time + "\"]";
-
-                        // let multi_sec = redisClient.multi();
 
 
                         multi.select(3)
@@ -1408,22 +1335,40 @@ const searchCompetitorId = function (fandomExistingUserList, count, callback) {
 
 
 
-const getCompetitorUserInfo = function (competitorId, callback) {
+const getCompetitorUserInfo = function (res, competitorId, callback) {
 
 
+    let temp_int = 0;
 
     const multi = redisClient.multi();
     multi.select(0)
         .hgetall(getUserInfo(competitorId))
+        .select(1)
+        .hgetall(getUserGameInfo(competitorId, 0))
         .exec(function (err, reply) {
+
+
             if (err) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
             }
 
             const competitorInfo = reply[1];
+            let temp_check = reply[3];
 
-            // const multi = redisClient.multi();
+
+            if (temp_check == null) {
+                setUserLogining.setUserLoginingNoMatched(res, competitorId, 'gameStart');
+                return;
+            }
+
+
+            if (competitorId == null) {
+                setUserLogining.setUserLoginingNoMatched(res, competitorId, 'gameStart');
+                return;
+            }
+
+
             multi.select(1);
 
             for (let i = 0; i < GAME_BOARD; i++)
@@ -1433,12 +1378,11 @@ const getCompetitorUserInfo = function (competitorId, callback) {
                 multi.hget(getUserGameInfo(competitorId, j), getFieldGameBalloon());
 
 
-
-
             multi.hget(getHasStarByLevel(), competitorInfo.level)
                 .select(0)
                 .zrank(getUserRank(competitorInfo.fandomName), competitorId)
                 .exec(function (err, replies) {
+
                     if (err) {
                         sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                         return;
@@ -1476,8 +1420,6 @@ const getCompetitorUserInfo = function (competitorId, callback) {
 
 
 
-
-
 router.post('/gameOver', function (req, res) {
 
 
@@ -1488,15 +1430,11 @@ router.post('/gameOver', function (req, res) {
     const userGetBalloonCount = req.body.userGetBalloonCount;
     const competitorId = req.body.competitorId;
     const competitorGameInfo = req.body.competitorGameInfo;
-
-
-
     const multi = redisClient.multi();
     let statusInfo = [];
     let recBattle= [];
     let info;
     let info_battle;
-    let userLevel;
 
 
 
@@ -1538,7 +1476,6 @@ router.post('/gameOver', function (req, res) {
 
 
             let splitedGameInfo = competitorGameInfo.split(",");
-            // var multi = redisClient.multi();
 
 
             multi.select(1);
@@ -1564,27 +1501,20 @@ router.post('/gameOver', function (req, res) {
 
 
 
-
-
-
-
-
-
-
 router.post('/settingDefenseMode', function (req, res) {
 
 
     const id = req.body.id;
     const userGameInfo = req.body.userGameInfo;
+    const splitedGameInfo = userGameInfo.split(",");
+    const multi = redisClient.multi();
+
 
     if (!id || !userGameInfo) {
         sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
         return;
     }
 
-
-    const splitedGameInfo = userGameInfo.split(",");
-    const multi = redisClient.multi();
 
     multi.select(1);
     for (let i = 0; i < GAME_BOARD; i++)
@@ -1603,9 +1533,6 @@ router.post('/settingDefenseMode', function (req, res) {
 
 
 
-
-
-
 router.post('/gameMatch', function (req, res) {
 
     const id = req.body.id;
@@ -1613,6 +1540,7 @@ router.post('/gameMatch', function (req, res) {
 
     redisClient.select(3);
     redisClient.exists(revengedId, function (err, isExist) {
+
         if (err) {
             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
             return;
@@ -1623,7 +1551,10 @@ router.post('/gameMatch', function (req, res) {
             return;
         }
 
-        getCompetitorUserInfo(revengedId, function (result) {
+
+        getCompetitorUserInfo(res, revengedId, function (result) {
+
+
             if (_.isEmpty(result)) {
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                 return;
@@ -1644,12 +1575,6 @@ router.post('/gameMatch', function (req, res) {
         });
     });
 });
-
-
-
-
-
-
 
 
 
