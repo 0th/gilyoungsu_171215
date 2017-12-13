@@ -849,14 +849,6 @@ router.post('/goLogin', function (req, res) {
 });
 
 
-router.post('/loginSucceed1', function (req, res) {
-    const id = req.body.id;
-    if (!id) {
-        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
-        return;
-    }
-    setUserLogining.setUserLogining(res, id, 'loginSucceed');
-});
 
 
 
@@ -865,49 +857,11 @@ router.post('/loginSucceed1', function (req, res) {
 
 
 
-// 1. 디비 기본형을 만듬
-router.post('/makdBasicUserDB', function (req, res) {
-
-    const id = req.body.id;
-    const nickName = req.body.nickName;
-    const pw = req.body.pw;
-
-
-    if (!id || !nickName || !pw ) {
-        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
-        return;
-    }
-
-    const userInfo = {
-        id: id,
-        nickname: nickName,
-        pw: pw
-
-    };
-
-    const multi = redisClient.multi();
-
-    multi.select(4)
-
-        .sismember(getFanid(), id)
-        .exec(function (err, reply) {
-
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                return;
-            }
-
-            let result = reply[1];
-
-            sendMessage.sendSucceedMessage(res, result);
-        });
-
-});
 
 
 
 
-// 2. 회원가입 신청했을때 아이디 닉네임 확인 절차
+// 1. 회원가입 신청했을때 아이디 닉네임 확인 절차
 // - 중복이면 실패, 아니면 성공
 
 
@@ -1099,6 +1053,13 @@ router.post('/goRegister', function (req, res) {
  */
 
 
+//00th updateFandom
+
+
+
+
+
+
 router.post('/updatefandom', function (req, res) {
 
     let fandom_before = req.body.fandom_before;
@@ -1109,14 +1070,20 @@ router.post('/updatefandom', function (req, res) {
     let score_rank;
     let star;
     let fandom_balloon;
+    let userInfoFan;
+    let str_fandomName = 'fandomName';
+    let canGameUser;
+    let userRank;
+    let fanFandom;
 
     async.waterfall([
 
 
+            //1. fandomStar: 스타-팬덤
             function(callback) {
 
                 ++count;
-
+                consoleInputLog("1-1 count: "+count);
                 multi.select(0)
                     .hget(getFandomStar(),fandom_before)
                     .hdel(getFandomStar(),fandom_before)
@@ -1124,9 +1091,7 @@ router.post('/updatefandom', function (req, res) {
                         if (err) {
                             callback(null, ERROR_DATABASE);
                         }
-
                         star = reply[1];
-
                         callback(null, star);
                     });
 
@@ -1135,6 +1100,8 @@ router.post('/updatefandom', function (req, res) {
             function(arg, callback) {
 
                 ++count;
+                consoleInputLog("1-2 count: "+count);
+
                 star = arg;
 
                 multi.select(0)
@@ -1143,16 +1110,17 @@ router.post('/updatefandom', function (req, res) {
                         if (err) {
                             callback(null, ERROR_DATABASE);
                         }
-
                         callback(null, '1. 팬덤-스타 업데이트(2/2) ');
-
                     });
 
             },
 
+            //2. fandomUserNumber: initFandomUserNumber - 팬덤별 유저 수 초기화
             function(arg, callback) {
 
                 ++count;
+                consoleInputLog("2-1 count: "+count);
+
                 multi.select(0)
                     .zscore(getFandomUserNumber(),fandom_before)
                     .zrem(getFandomUserNumber(),fandom_before)
@@ -1170,6 +1138,7 @@ router.post('/updatefandom', function (req, res) {
             function(arg, callback) {
 
                 ++count;
+                consoleInputLog("2-2 count: "+count);
 
                 score_member = arg;
 
@@ -1183,8 +1152,11 @@ router.post('/updatefandom', function (req, res) {
                     });
             },
 
+            // 3. fandomRank: initFandomRank - 팬덤 랭킹 초기화
             function(arg, callback) {
                 ++count;
+                consoleInputLog("3-1 count: "+count);
+
                 multi.select(0)
                     .zscore(getFandomRank(),fandom_before)
                     .zrem(getFandomRank(),fandom_before)
@@ -1199,6 +1171,8 @@ router.post('/updatefandom', function (req, res) {
 
             function(arg, callback) {
                 ++count;
+                consoleInputLog("3-2 count: "+count);
+
                 score_rank = arg;
 
                 multi.select(0)
@@ -1211,9 +1185,11 @@ router.post('/updatefandom', function (req, res) {
                     });
             },
 
+            //4. fandomBalloonRank: 팬덤 : initFandomBalloonRank - 팬덤별 풍선 랭킹 초기화
             function(arg,callback) {
 
                 ++count;
+                consoleInputLog("4-1 count: "+count);
 
                 multi.select(0)
 
@@ -1230,7 +1206,10 @@ router.post('/updatefandom', function (req, res) {
             },
 
             function (arg, callback) {
+
                 ++count;
+                consoleInputLog("4-2 count: "+count);
+
                 fandom_balloon = arg;
 
                 let num_color = 0;
@@ -1249,6 +1228,179 @@ router.post('/updatefandom', function (req, res) {
                         callback(null, '4. 팬덤 풍선 등록(2/2)');
                     });
                 }
+            },
+
+            //5. user:info
+            function(arg,callback) {
+
+                ++count;
+                consoleInputLog("5-1 count: "+count);
+
+                multi.select(4)
+                    .smembers(getFanList(fandom_before))
+                    .exec(function (err, reply) {
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+
+                        userInfoFan = reply[1];
+                        callback(null, userInfoFan);
+
+                    });
+
+            },
+
+            function(arg,callback) {
+
+                ++count;
+                consoleInputLog("5-2 count: "+count);
+                userInfoFan = arg;
+
+                multi.select(0);
+
+                for(let i=0; i < userInfoFan.length; i++){
+
+                    multi.hset(getUserInfo(userInfoFan[i]),str_fandomName,fandom_after);
+                    multi.exec(function (err) {
+
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        callback(null, '5. user:info');
+
+                    });
+                }
+
+            },
+
+
+            //6. canGameUser: 팬덤
+            function(arg,callback) {
+
+                ++count;
+                consoleInputLog("6-1 count: "+count);
+
+                multi.select(0)
+                    .smembers(getCanGameUser(fandom_before))
+                    .exec(function (err, reply) {
+
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        canGameUser = reply[1];
+                        callback(null, canGameUser);
+                    });
+            },
+
+
+            function(arg,callback) {
+
+                ++count;
+                consoleInputLog("6-2 count: "+count);
+
+                canGameUser = arg;
+
+                multi.select(0);
+
+
+                for(let i=0; i < canGameUser.length; i++){
+
+                    multi.sadd(getCanGameUser(fandom_after), canGameUser[i])
+                        .srem(getCanGameUser(fandom_before), canGameUser[i])
+                        .exec(function (err) {
+
+                            if (err) {
+                                callback(null, ERROR_DATABASE);
+                            }
+                            callback(null, 'canGameUser 부분 수정');
+                        });
+                }
+
+
+            },
+
+
+            //7. userRank
+            function(arg,callback) {
+
+                ++count;
+                consoleInputLog("7-1 count: "+count);
+
+                multi.select(0)
+                    .zrange(getUserRank(fandom_before), 0 , -1, 'withscores')
+                    .exec(function (err, reply) {
+
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        userRank = reply[1];
+                        callback(null, userRank);
+                    });
+            },
+
+
+            function(arg,callback) {
+
+                ++count;
+                consoleInputLog("7-2 count: "+count);
+
+                userRank = arg;
+
+                for(let i=0; i < userRank.length; i=i+2){
+
+                    multi.zadd(getUserRank(fandom_after),userRank[i+1],userRank[i])
+                        .zrem(getUserRank(fandom_before),userRank[i])
+                        .exec(function (err) {
+
+                            if (err) {
+                                callback(null, ERROR_DATABASE);
+                            }
+                            callback(null, 'canGameUser 부분 수정');
+                        });
+                }
+
+            },
+
+
+            //8. fan: fandom: 팬덤
+            function(arg, callback) {
+
+                ++count;
+                consoleInputLog("8-1 count: "+count);
+
+                multi.select(4)
+                    .smembers(getFanList(fandom_before))
+                    .exec(function (err, reply) {
+
+                        if (err) {
+                            callback(null, ERROR_DATABASE);
+                        }
+                        fanFandom = reply[1];
+                        callback(null, fanFandom);
+                    });
+            },
+
+
+            function(arg,callback) {
+
+                ++count;
+                consoleInputLog("8-2 count: "+count);
+
+                fanFandom = arg;
+
+                multi.select(4);
+                for(let i=0; i < fanFandom.length; i++){
+
+                    multi.sadd(getFanList(fandom_after),fanFandom[i])
+                        .srem(getFanList(fandom_before),fanFandom[i])
+                        .exec(function (err) {
+                            if (err) {
+                                callback(null, ERROR_DATABASE);
+                            }
+                            callback(null, 'fan: Fandom 부분 수정');
+
+                        });
+                }
             }
         ],
 
@@ -1266,6 +1418,10 @@ router.post('/updatefandom', function (req, res) {
 
 
 });
+
+
+
+
 
 
 
@@ -2303,6 +2459,8 @@ router.post('/purchaseItemWithCoin', function (req, res) {
     const id = req.body.id;
     const coin = req.body.coin;
     const item = req.body.item;
+
+
     const slogan = "슬로건";
     const multi = redisClient.multi();
 
@@ -2426,7 +2584,7 @@ router.get('/initFandomStar', function (req, res) {
 });
 
 
-router.get('/fandomBaseInfo01', function (req, res) {
+router.get('/fandomBaseInfo', function (req, res) {
 
 
     let datas = [];
@@ -2932,61 +3090,6 @@ router.post('/fandomFirstBalloon', function (req, res) {
             let firstColor = reply[1];
 
             sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, firstColor[0]);
-        });
-});
-
-
-router.get('/fandomBaseInfo', function (req, res) {
-
-    let datas = [];
-    let fandomBaseInfos = [];
-    const multi = redisClient.multi();
-    multi.select(0)
-        .zrevrange(getFandomRank(), 0, -1, 'withscores')
-        .exec(function (err, rep) {
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                return;
-            }
-
-            let fandomRankList = rep[1];
-
-            multi.select(0);
-
-            for (let i = 0; i < fandomRankList.length; i = i + 2) {
-                if (fandomRankList[i] != getFieldGamingNow()) {
-                    let fandomBaseData = {};
-                    fandomBaseData[getFieldFandomName()] = fandomRankList[i];
-                    fandomBaseData[getFieldScore()] = fandomRankList[i + 1];
-                    datas.push(fandomBaseData);
-
-                    multi.zscore(getFandomUserNumber(), fandomRankList[i])
-                        .zrevrange(getFandomBalloonRank(fandomRankList[i]), 0, 0);
-                }
-            }
-
-            multi.exec(function (err, rep) {
-                if (err) {
-                    sendMessage.sendErrorMessage(res, ERROR_DATABASE, err);
-                    return;
-                }
-
-                for (let i = 0; i < datas.length; i++) {
-                    let fandomBaseData = datas[i];
-
-                    let j = i * 2 + 1;
-
-                    fandomBaseData[getFieldUserNumber()] = rep[j];
-                    let firstBalloon = rep[j + 1];
-                    fandomBaseData[getFieldBalloonFirstColor()] = firstBalloon[0];
-
-                    fandomBaseInfos.push(fandomBaseData);
-                }
-
-
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, fandomBaseInfos);
-
-            });
         });
 });
 
