@@ -9,7 +9,7 @@ services:
       - "6379:6379"
     volumes:
       - ./redis:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --save 600 1
 
 
   fc-app:
