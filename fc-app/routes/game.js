@@ -37,6 +37,9 @@ message[ERROR_NO_MATCH] = "게임 매칭 실패";
 
 
 
+
+
+
 function addMethod(object, functionName, func) {
     const overloadingFunction = object[functionName];
     object[functionName] = function () {
@@ -52,25 +55,28 @@ function addMethod(object, functionName, func) {
 
 const sendMessage = new SendMessage();
 
+
+
+
 function SendMessage() {
     addMethod(this, "sendSucceedMessage", function (res, succeedCode) {
         res.send({succeedCode: succeedCode});
-        // console.log({succeedCode: succeedCode});
+        console.log({succeedCode: succeedCode});
     });
 
     addMethod(this, "sendSucceedMessage", function (res, succeedCode, sendData) {
         res.send({succeedCode: succeedCode, data: sendData});
-        // console.log({succeedCode: succeedCode, data: JSON.stringify(sendData)});
+        console.log({succeedCode: succeedCode, data: JSON.stringify(sendData)});
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode, err) {
         res.send({errorCode: errorCode, errorMessage: message[errorCode]});
-        // console.log({errorCode: errorCode, errorMessage: message[errorCode], error: err});
+        console.log({errorCode: errorCode, errorMessage: message[errorCode], error: err});
     });
 
     addMethod(this, "sendErrorMessage", function (res, errorCode) {
         res.send({errorCode: errorCode, errorMessage: message[errorCode]});
-        // console.log({errorCode: errorCode, errorMessage: message[errorCode]});
+        console.log({errorCode: errorCode, errorMessage: message[errorCode]});
     });
 }
 
@@ -80,16 +86,21 @@ function SetUserLogining() {
 
 
     addMethod(this, "setUserLogining", function (res, userId, protocol) {
+
         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, '[settingDefenseMode] ok , [GameOver] usr: login competitorId: logout ');
+
     });
 
 
     addMethod(this, "setUserLoginingNoMatched", function (res, userId, protocol) {
+
         sendMessage.sendErrorMessage(res, ERROR_NO_MATCH);
+
     });
 
 
-    addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, competitorGameInfo, userInfo) {
+    addMethod(this, "setUserLoginingMatched", function (res, userId, competitorId, competitorGameInfo, userInfo,fandomName) {
+
 
         const matchedInfo = {};
         let multi;
@@ -111,17 +122,85 @@ function SetUserLogining() {
             .select(1)
             .lpush(getUserMatchedList(competitorId), JSON.stringify(matchedInfo))
             .expire(getUserMatchedList(competitorId),TIME_WEEK)
-            .select(0)
-            .exec(function (err) {
+            .select(4)
+            .hgetall(getSloganForFandom(fandomName))
+            .exec(function (err, reply) {
+
                 if (err) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                     return;
                 }
+
+
+                let getReply = reply;
+                consoleInputLog("getReply: "+getReply);
+
+
+                let list = [];
+                let sloganList = [];
+                let getuser = "";
+                let getslogan = "";
+                let num= 0;
+                let send_message = [];
+
+
+                list  = getReply[7];
+                consoleInputLog("list: "+list);
+
+
+
+                if(list){
+
+                    let key = _.keys(list);
+
+                    _.each(key, function (index) {
+                        const info = {};
+                        info.user = index;
+                        info.slogan = list[index];
+                        sloganList.push(info);
+                    });
+
+
+                    let generateRandom = function (min, max) {
+                        let ranNum = Math.floor(Math.random()*(max-min+1)) + min;
+                        return ranNum;
+                    }
+
+                    num = generateRandom(0,sloganList.length-1);
+                    getuser = sloganList[num].user;
+                    getslogan = sloganList[num].slogan;
+
+                    send_message =[getslogan,getuser];
+                    // sendMessage.sendSucceedMessage(res, send_message);
+                    // return;
+
+                }else{
+
+                    getuser = "팬덤컵";
+                    getslogan = "팬심으로 대동단결";
+                    send_message =[getslogan,getuser];
+                    // sendMessage.sendSucceedMessage(res, send_message);
+                    // return;
+
+                }
+
+
+                consoleInputLog("getuser: "+getuser);
+                consoleInputLog("getslogan: "+getslogan);
+
+
+
+
+                competitorGameInfo['user'] = getuser;
+                competitorGameInfo['slogan'] = getslogan;
+                consoleInputLog("competitorGameInfo: "+JSON.stringify(competitorGameInfo));
+
                 sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, competitorGameInfo);
             });
 
 
     });
+
 
 
     addMethod(this, "setUserRevenge", function (res, userId, competitorId, competitorGameInfo, userInfo) {
@@ -158,11 +237,14 @@ function SetUserLogining() {
 
     addMethod(this, "checkGhost", function (res, id, matchedInfo) {
 
+
         const multi = redisClient.multi();
+
 
         multi.select(1)
             .lrem(getUserMatchedList(id),0,matchedInfo)
             .exec(function (err) {
+
 
                 if(err){
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
@@ -274,9 +356,6 @@ function getUserMatchedList(userId) {
 
 
 
-
-
-
 ///////////////////////////////// GILVERT //////////////////////////////////
 
 
@@ -301,6 +380,106 @@ function userStatus(userid) {
 function recordBattle(id) {
     return 'battle:'+id;
 }
+
+
+
+function checkStatus(id) {
+    return 'status:'+id;
+}
+
+
+
+
+
+
+//-------------------* UPDATE_180103 0th*-------------------//
+
+
+function getSloganForFandom(fandomName) {
+    return 'fan:slogan:' + fandomName;
+}
+
+
+router.post('/gameStart', function (req, res) {
+
+    const userFandomName = req.body.fandomName;
+    const userId = req.body.userId;
+
+
+
+    if (!userFandomName) {
+        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
+        return;
+    }
+
+
+
+    const multi = redisClient.multi();
+
+
+    multi.select(0)
+        .zrange(getFandomUserNumber(), 0, -1, 'withscores')
+        .exec(function (err, reply) {
+
+            if (err) {
+                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                return;
+            }
+
+            let fandomUserNumbers = reply[1];
+            let fandomExistingUserList = [];
+
+            for (let i = 0; i < fandomUserNumbers.length; i = i + 2) {
+                let fandomName = fandomUserNumbers[i];
+                let userNumber = fandomUserNumbers[i + 1];
+                if (userNumber != 0 && userFandomName != fandomName && fandomName != getFieldCANT_GAME()) {
+                    let fandomInfo = {};
+                    fandomInfo[getFieldFandomName()] = fandomName;
+                    fandomInfo[getFieldUserNumber()] = userNumber;
+                    fandomExistingUserList.push(fandomInfo);
+                }
+            }
+
+
+
+            if (fandomExistingUserList.length == 0) {
+                setUserLogining.setUserLoginingNoMatched(res, userId, 'gameStart');
+                return;
+            } else {
+
+                searchCompetitorId(fandomExistingUserList, 0, function (competitorId) {
+
+                    if (competitorId == null) {
+                        setUserLogining.setUserLoginingNoMatched(res, userId, 'gameStart');
+                        return;
+                    }
+
+
+
+                    getCompetitorUserInfo(res, competitorId, function (result) {
+
+
+                        redisClient.select(0);
+                        redisClient.hgetall(getUserInfo(userId), function (err, userInfo) {
+
+                            if (err) {
+                                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                                return;
+                            }
+
+                            const time = moment().format('YYYY.MM.DD HH:mm');
+                            userInfo.time = time;
+
+                            setUserLogining.setUserLoginingMatched(res, userId, competitorId, result, userInfo, userFandomName);
+                        });
+
+                    });
+                });
+            }
+        });
+});
+
+
 
 
 
@@ -628,22 +807,25 @@ router.post('/userMatchedList', function (req, res) {
  - @id
  - 로그인 전에 사용자의 상태 파악
  - 상대방과의 대전 시간을 통해 상태 정의
-
+ - [추가] 다른기기에서 동일한 아이디 사용 금지
+ - 리턴값: yes,no,UsingMultipleDevices
  */
 
 
 router.post('/startLogin', function (req, res) {
 
 
-    let id;
+    let id = req.body.id;
     let multi;
     let flag_time;
     let flag_playing = false;
     let flag_id = false;
-    id = req.body.id;
 
 
     multi = redisClient.multi();
+
+
+    consoleInputLog("id: "+id);
 
 
     if (_.isEmpty(id)) {
@@ -651,210 +833,250 @@ router.post('/startLogin', function (req, res) {
         return;
     }
 
-    //1. 사용자 공격 상대방 확인
-    multi.select(2)
-        .get(recordBattle(id))
-        .exec(function (err,reply) {
+
+
+    //0. 다른기기 로그인 확인
+    multi.select(3)
+        .get(checkStatus(id))
+        .exec(function (err, reply) {
 
             if(err){
                 sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
             }
 
 
-            let info;
-            let time;
-            info = JSON.parse(reply[1]);
+            let flag = reply[1];
 
-            if(!info){
-
-                flag_playing = false;
-
-            }else{
-
-                time = info[1];
+            consoleInputLog("flag: "+flag);
 
 
 
-                let enemy_time = time;
-                let user_time = moment().format('YYYY.MM.DD HH:mm');
-                let old = new Date (enemy_time);
-                let now = new Date(user_time);
+            //0-1. 다른기기에 사용하는 경우 -> 생략
 
-                let old_time = old.getTime();
-                let now_time = now.getTime();
-                flag_time = DELAY_MATCHING_TIME * 0.1;
+            // if(flag){
+            //
+            //         consoleInputLog("다른기기에서 사용중");
+            //         sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "UsingMultipleDevices");
+            //         return;
+            //
+            //     }else{
 
-                if(flag_time < now_time - old_time){
-                    flag_playing = false;
-                }else{
-                    flag_playing = true;
-                }
+            //1. 사용자 공격 상대방 확인: 쵠근 배틀기록으로 확인
+            consoleInputLog("다른기기 중복 사용 체크 후 로그인");
+            multi.select(2)
+                .get(recordBattle(id))
+                .exec(function (err,reply) {
 
-
-            }
-
-        });
-
-
-    //2. 사용자 방어 상대방 확인
-
-    redisClient.select(1);
-    redisClient.lrange(getUserMatchedList(id), 0, -1, function (err, matchedInfo) {
-
-        if (err) {
-            sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-            return;
-        }
-
-        if (_.isEmpty(matchedInfo)) {
-
-            redisClient.select(3);
-            let statusInfo = [];
-            statusInfo.push("login");
-            statusInfo.push(current_time());
-            let info = JSON.stringify(statusInfo);
-            redisClient.set(userStatus(id),info);
+                    if(err){
+                        sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                    }
 
 
-            if(flag_playing){
-                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
-                return;
-            }
+                    let info;
+                    let time;
+
+                    info = JSON.parse(reply[1]);
+                    consoleInputLog("reply: "+reply);
 
 
-            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "yes");
-            return;
-        }
+                    if(!info){
+
+                        flag_playing = false;
+
+                    }else{
+
+                        time = info[1];
+
+                        let enemy_time = time;
+                        let user_time = moment().format('YYYY.MM.DD HH:mm');
+                        let old = new Date (enemy_time);
+                        let now = new Date(user_time);
+
+                        let old_time = old.getTime();
+                        let now_time = now.getTime();
+                        flag_time = DELAY_MATCHING_TIME * 0.1;
+
+                        if(flag_time < now_time - old_time){
+                            flag_playing = false;
+                        }else{
+                            flag_playing = true;
+                        }
 
 
-        let temp_time;
-        let temp_id;
-        let match_time=[];
-        let match_id = [];
-        let i=0;
+                    }
 
-        matchedInfo.forEach(function (info) {
-
-            const matchedInfo = JSON.parse(info)
-            temp_time = matchedInfo.time;
-            match_time[i] = temp_time;
-
-            temp_id = matchedInfo.id;
-            match_id[i] = temp_id;
-
-            ++i;
-
-        });
+                });
 
 
+            //2. 사용자 방어 상대방 확인: 매칭 전체 기록에서 확인( 상대가 쳐들어 온 기록)
+            redisClient.select(1);
+            redisClient.lrange(getUserMatchedList(id), 0, -1, function (err, matchedInfo) {
 
-        const enemy_id = String(match_id[0]);
 
-
-        multi.select(3)
-            .get(userStatus(enemy_id))
-            .exec(function (err, reply) {
-                if(err){
+                if (err) {
                     sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                     return;
                 }
 
 
-                let temp;
-                let status;
-                temp = JSON.parse(reply[1]);
+                // 매칭 기록이 없다면???
+                if (_.isEmpty(matchedInfo)) {
 
+                    redisClient.select(3);
+                    let statusInfo = [];
+                    statusInfo.push("login");
+                    statusInfo.push(current_time());
+                    let info = JSON.stringify(statusInfo);
+                    redisClient.set(userStatus(id),info);
 
-                if(!temp){
-                    status = 'logout';
-                }else{
-                    status = temp[0];
+                    if(flag_playing){
+                        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
+                        return;
+                    }
+
+                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "yes");
+                    return;
                 }
 
 
-                const enemy_time = match_time[0];
-                const user_time = moment().format('YYYY.MM.DD HH:mm');
-                let old = new Date(enemy_time);
-                let now = new Date(user_time);
-                let old_time = old.getTime();
-                let now_time = now.getTime();
-                let matching_time = DELAY_MATCHING_TIME * 12;
+                let temp_time;
+                let temp_id;
+                let match_time=[];
+                let match_id = [];
+                let i=0;
+
+                matchedInfo.forEach(function (info) {
+
+                    const matchedInfo = JSON.parse(info)
+                    temp_time = matchedInfo.time;
+                    match_time[i] = temp_time;
+
+                    temp_id = matchedInfo.id;
+                    match_id[i] = temp_id;
+
+                    ++i;
+
+                });
 
 
+                const enemy_id = String(match_id[0]);
 
-
-                multi.select(2)
-                    .get(recordBattle(enemy_id))
+                multi.select(3)
+                    .get(userStatus(enemy_id))
                     .exec(function (err, reply) {
-
-
                         if(err){
                             sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
                             return;
                         }
 
+                        consoleInputLog("8");
 
-                        if(!reply){
+                        let temp;
+                        let status;
+                        temp = JSON.parse(reply[1]);
 
-                            flag_id = false;
 
+                        if(!temp){
+                            status = 'logout';
                         }else{
+                            status = temp[0];
+                        }
 
-                            let value = JSON.parse(reply[1]);
-                            1
-                            if( value == "" || value == null || value == undefined || ( value != null && typeof value == "object" && !Object.keys(value).length ) ){
 
-                                flag_id = false;
+                        const enemy_time = match_time[0];
+                        const user_time = moment().format('YYYY.MM.DD HH:mm');
+                        let old = new Date(enemy_time);
+                        let now = new Date(user_time);
+                        let old_time = old.getTime();
+                        let now_time = now.getTime();
+                        let matching_time = DELAY_MATCHING_TIME * 12;
 
-                            }else{
 
-                                // let other_id = info_battle[0];
-                                let other_id = value[0];
 
-                                if(other_id == id){
-                                    flag_id = true;
-                                }else{
-                                    flag_id = false;
+                        //3. 공격자의 최신 공격기록도 확인 -> 사용자 매칭이 되는지 까지 확인
+                        multi.select(2)
+                            .get(recordBattle(enemy_id))
+                            .exec(function (err, reply) {
+
+
+                                if(err){
+                                    sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
+                                    return;
                                 }
-                            }
+
+                                consoleInputLog("9");
+
+
+                                if(!reply){
+
+                                    flag_id = false;
+
+                                }else{
+
+                                    let value = JSON.parse(reply[1]);
+                                    1
+                                    if( value == "" || value == null || value == undefined || ( value != null && typeof value == "object" && !Object.keys(value).length ) ){
+
+                                        flag_id = false;
+
+                                    }else{
+
+                                        // let other_id = info_battle[0];
+                                        let other_id = value[0];
+
+                                        if(other_id == id){
+                                            flag_id = true;
+                                        }else{
+                                            flag_id = false;
+                                        }
+                                    }
 
 
 
-                        }
+                                }
 
 
 
-                        if(now_time-old_time < matching_time && status =="playing" && flag_id == true){
-
-                            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
-
-                        }else {
+                                if(now_time-old_time < matching_time && status =="playing" && flag_id == true){
 
 
-                            if(flag_playing){
-                                sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
-                                return;
-                            }
+                                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
+
+                                }else {
 
 
-                            redisClient.select(3);
-                            const statusInfo = [];
-                            statusInfo.push("login");
-                            statusInfo.push(current_time());
-                            const info = JSON.stringify(statusInfo);
-                            redisClient.set(userStatus(id),info);
+                                    //
 
-                            sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "yes");
+                                    if(flag_playing){
+                                        sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "no");
+                                        return;
+                                    }
+                                    consoleInputLog("10");
 
-                        }
+
+                                    redisClient.select(3);
+                                    const statusInfo = [];
+                                    statusInfo.push("login");
+                                    statusInfo.push(current_time());
+                                    const info = JSON.stringify(statusInfo);
+                                    redisClient.set(userStatus(id),info);
+
+                                    sendMessage.sendSucceedMessage(res, SUCCEED_RESPONSE, "yes");
+
+                                }
+
+                            });
 
                     });
 
             });
 
-    });
-});
+            // }
 
+
+        });
+
+});
 
 
 
@@ -1192,81 +1414,6 @@ router.get('/initHasStarByLevel', function (req, res) {
 
 
 
-router.post('/gameStart', function (req, res) {
-
-    const userFandomName = req.body.fandomName;
-    const userId = req.body.userId;
-
-    if (!userFandomName) {
-        sendMessage.sendErrorMessage(res, ERROR_WRONG_INPUT);
-        return;
-    }
-
-
-
-    const multi = redisClient.multi();
-    multi.select(0)
-        .zrange(getFandomUserNumber(), 0, -1, 'withscores')
-        .exec(function (err, reply) {
-
-            if (err) {
-                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                return;
-            }
-
-            let fandomUserNumbers = reply[1];
-            let fandomExistingUserList = [];
-
-            for (let i = 0; i < fandomUserNumbers.length; i = i + 2) {
-                let fandomName = fandomUserNumbers[i];
-                let userNumber = fandomUserNumbers[i + 1];
-                if (userNumber != 0 && userFandomName != fandomName && fandomName != getFieldCANT_GAME()) {
-                    let fandomInfo = {};
-                    fandomInfo[getFieldFandomName()] = fandomName;
-                    fandomInfo[getFieldUserNumber()] = userNumber;
-                    fandomExistingUserList.push(fandomInfo);
-                }
-            }
-
-
-
-            if (fandomExistingUserList.length == 0) {
-                setUserLogining.setUserLoginingNoMatched(res, userId, 'gameStart');
-                return;
-            } else {
-
-                searchCompetitorId(fandomExistingUserList, 0, function (competitorId) {
-
-                    if (competitorId == null) {
-                        setUserLogining.setUserLoginingNoMatched(res, userId, 'gameStart');
-                        return;
-                    }
-
-
-                    getCompetitorUserInfo(res, competitorId, function (result) {
-
-
-                        redisClient.select(0);
-                        redisClient.hgetall(getUserInfo(userId), function (err, userInfo) {
-
-                            if (err) {
-                                sendMessage.sendErrorMessage(res, ERROR_SERVER, err);
-                                return;
-                            }
-
-                            const time = moment().format('YYYY.MM.DD HH:mm');
-                            userInfo.time = time;
-
-                            setUserLogining.setUserLoginingMatched(res, userId, competitorId, result, userInfo);
-                        });
-                    });
-                });
-            }
-        });
-});
-
-
-
 
 
 const searchCompetitorId = function (fandomExistingUserList, count, callback) {
@@ -1506,6 +1653,9 @@ router.post('/settingDefenseMode', function (req, res) {
 
     const id = req.body.id;
     const userGameInfo = req.body.userGameInfo;
+
+    consoleInputLog("userGameInfo: "+userGameInfo);
+
     const splitedGameInfo = userGameInfo.split(",");
     const multi = redisClient.multi();
 
@@ -1529,6 +1679,10 @@ router.post('/settingDefenseMode', function (req, res) {
         setUserLogining.setUserLogining(res, id, 'settingDefenseMode');
     });
 });
+
+
+
+
 
 
 
