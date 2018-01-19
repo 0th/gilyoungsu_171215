@@ -3444,6 +3444,9 @@ router.get('/getNotice', function (req, res) {
 
 
 
+
+
+
 router.post('/delUser', function (req, res) {
 
 
@@ -3477,8 +3480,10 @@ router.post('/delUser', function (req, res) {
         user_fandomName = userInfo.fandomName;
 
 
+
         const multi = redisClient.multi();
         multi.select(0)
+            .zrem(getUserRank(user_fandomName),id)
             .zincrby(getFandomUserNumber(), -1, userInfo.fandomName)
             .zincrby(getFandomBalloonRank(userInfo.fandomName), -1, userInfo.selectedBalloonColor)
             .del(getUserInfo(id))
